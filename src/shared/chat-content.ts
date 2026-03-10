@@ -1,6 +1,28 @@
+export type ChatTextBlock = {
+  type?: unknown;
+  text?: unknown;
+  textSignature?: unknown;
+};
+
+export function resolveChatTextBlockPhase(block: ChatTextBlock): string | undefined {
+  const raw = block.textSignature;
+  if (typeof raw !== "string" || !raw.includes('"phase"')) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as { phase?: unknown };
+    return typeof parsed.phase === "string" && parsed.phase.trim()
+      ? parsed.phase.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function extractTextFromChatContent(
   content: unknown,
   opts?: {
+    includeTextBlock?: (block: ChatTextBlock) => boolean;
     sanitizeText?: (text: string) => string;
     joinWith?: string;
     normalizeText?: (text: string) => string;
@@ -24,10 +46,14 @@ export function extractTextFromChatContent(
     if (!block || typeof block !== "object") {
       continue;
     }
-    if ((block as { type?: unknown }).type !== "text") {
+    const textBlock = block as ChatTextBlock;
+    if (textBlock.type !== "text") {
       continue;
     }
-    const text = (block as { text?: unknown }).text;
+    if (opts?.includeTextBlock && !opts.includeTextBlock(textBlock)) {
+      continue;
+    }
+    const text = textBlock.text;
     if (typeof text !== "string") {
       continue;
     }

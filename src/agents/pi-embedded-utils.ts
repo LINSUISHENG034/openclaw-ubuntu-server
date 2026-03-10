@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import { extractTextFromChatContent } from "../shared/chat-content.js";
+import { extractTextFromChatContent, resolveChatTextBlockPhase } from "../shared/chat-content.js";
 import { stripReasoningTagsFromText } from "../shared/text/reasoning-tags.js";
 import { sanitizeUserFacingText } from "./pi-embedded-helpers.js";
 import { formatToolDetail, resolveToolDisplay } from "./tool-display.js";
@@ -43,7 +43,11 @@ export function stripDowngradedToolCallText(text: string): string {
   if (!text) {
     return text;
   }
-  if (!/\[Tool (?:Call|Result)/i.test(text) && !/\[Historical context/i.test(text)) {
+  if (
+    !/\[Tool (?:Call|Result)/i.test(text) &&
+    !/\[Historical context/i.test(text) &&
+    !/(?:^|\n)to=[a-z0-9_:-]+[^\n]*\n/i.test(text)
+  ) {
     return text;
   }
 
@@ -186,8 +190,36 @@ export function stripDowngradedToolCallText(text: string): string {
     return result;
   };
 
+  const stripCodexToolCalls = (input: string): string => {
+    const markerRe = /(^|\n)to=[a-z0-9_:-]+[^\n]*(?:\r?\n)+/gi;
+    let result = "";
+    let cursor = 0;
+    for (const match of input.matchAll(markerRe)) {
+      const prefix = match[1] ?? "";
+      const matchIndex = match.index ?? 0;
+      const start = matchIndex + prefix.length;
+      if (start < cursor) {
+        continue;
+      }
+      let index = matchIndex + match[0].length;
+      const end = consumeJsonish(input, index, { allowLeadingNewlines: true });
+      if (end === null) {
+        continue;
+      }
+      result += input.slice(cursor, start);
+      index = end;
+      while (index < input.length && (input[index] === "\n" || input[index] === "\r")) {
+        index += 1;
+      }
+      cursor = index;
+    }
+    result += input.slice(cursor);
+    return result;
+  };
+
   // Remove [Tool Call: name (ID: ...)] blocks and their Arguments.
   let cleaned = stripToolCalls(text);
+  cleaned = stripCodexToolCalls(cleaned);
 
   // Remove [Tool Result for ID ...] blocks and their content.
   cleaned = cleaned.replace(/\[Tool Result for ID[^\]]*\]\n?[\s\S]*?(?=\n*\[Tool |\n*$)/gi, "");
@@ -210,6 +242,7 @@ export function stripThinkingTagsFromText(text: string): string {
 export function extractAssistantText(msg: AssistantMessage): string {
   const extracted =
     extractTextFromChatContent(msg.content, {
+      includeTextBlock: (block) => resolveChatTextBlockPhase(block) !== "commentary",
       sanitizeText: (text) =>
         stripThinkingTagsFromText(
           stripDowngradedToolCallText(stripMinimaxToolCallXml(text)),

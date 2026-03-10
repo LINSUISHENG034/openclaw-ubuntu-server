@@ -27,7 +27,10 @@ export {
   shouldResolveSessionIdInput,
   shouldVerifyRequesterSpawnedSessionVisibility,
 } from "./sessions-resolution.js";
-import { extractTextFromChatContent } from "../../shared/chat-content.js";
+import {
+  extractTextFromChatContent,
+  resolveChatTextBlockPhase,
+} from "../../shared/chat-content.js";
 import { sanitizeUserFacingText } from "../pi-embedded-helpers.js";
 import {
   stripDowngradedToolCallText,
@@ -158,6 +161,7 @@ export function extractAssistantText(message: unknown): string | undefined {
   }
   const joined =
     extractTextFromChatContent(content, {
+      includeTextBlock: (block) => resolveChatTextBlockPhase(block) !== "commentary",
       sanitizeText: sanitizeTextContent,
       joinWith: "",
       normalizeText: (text) => text.trim(),
