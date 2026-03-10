@@ -4,15 +4,16 @@ import { resolveOllamaBaseUrlForRun } from "../../ollama-stream.js";
 import {
   buildAfterTurnRuntimeContext,
   composeSystemPromptWithHookContext,
+  resolvePromptBuildHookResult,
+  decodeHtmlEntitiesInObject,
   isOllamaCompatProvider,
   prependSystemPromptAddition,
   resolveAttemptFsWorkspaceOnly,
   resolveOllamaCompatNumCtxEnabled,
-  resolvePromptBuildHookResult,
   resolvePromptModeForSession,
   shouldInjectOllamaCompatNumCtx,
-  decodeHtmlEntitiesInObject,
   wrapOllamaCompatNumCtx,
+  wrapStreamFnApplyTextToolCallCompat,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.js";
 
@@ -427,6 +428,163 @@ describe("wrapStreamFnTrimToolCallNames", () => {
 
     expect(finalToolCall.name).toBe("read");
     expect(finalToolCall.id).toBe("call_42");
+  });
+});
+
+describe("wrapStreamFnApplyTextToolCallCompat", () => {
+  function createFakeStream(params: { events: unknown[]; resultMessage: unknown }) {
+    return {
+      async result() {
+        return params.resultMessage;
+      },
+      [Symbol.asyncIterator]() {
+        return (async function* () {
+          for (const event of params.events) {
+            yield event;
+          }
+        })();
+      },
+    };
+  }
+
+  async function invokeWrappedStream(params: {
+    baseFn: (...args: never[]) => unknown;
+    compat?: {
+      textToolCalls?: {
+        enabled?: boolean;
+        formats?: Array<"codex_commentary_v1">;
+        requireKnownToolName?: boolean;
+        allowMixedText?: boolean;
+        maxCallsPerMessage?: number;
+      };
+    };
+    allowedToolNames?: Set<string>;
+  }) {
+    const wrappedFn = wrapStreamFnApplyTextToolCallCompat(
+      params.baseFn as never,
+      params.compat as never,
+      params.allowedToolNames,
+    );
+    return await wrappedFn({} as never, {} as never, {} as never);
+  }
+
+  it("converts text-form tool calls on done messages for custom openai-responses providers", async () => {
+    const finalMessage = {
+      role: "assistant",
+      stopReason: "stop",
+      content: [
+        {
+          type: "text",
+          text: 'to=exec commentary code\n{"command":"pwd","yieldMs":1000}',
+        },
+      ],
+    };
+    const doneEvent = {
+      type: "done",
+      reason: "stop",
+      message: finalMessage,
+    };
+    const baseFn = vi.fn(() =>
+      createFakeStream({
+        events: [doneEvent],
+        resultMessage: finalMessage,
+      }),
+    );
+
+    const stream = await invokeWrappedStream({
+      baseFn,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+      allowedToolNames: new Set(["exec"]),
+    });
+
+    const seenEvents: unknown[] = [];
+    for await (const event of stream) {
+      seenEvents.push(event);
+    }
+    const result = await stream.result();
+
+    expect(seenEvents).toEqual([
+      {
+        type: "done",
+        reason: "toolUse",
+        message: {
+          role: "assistant",
+          stopReason: "toolUse",
+          content: [
+            {
+              type: "toolCall",
+              id: "compat_text_call_1",
+              name: "exec",
+              arguments: { command: "pwd", yieldMs: 1000 },
+            },
+          ],
+        },
+      },
+    ]);
+    expect(result).toEqual({
+      role: "assistant",
+      stopReason: "toolUse",
+      content: [
+        {
+          type: "toolCall",
+          id: "compat_text_call_1",
+          name: "exec",
+          arguments: { command: "pwd", yieldMs: 1000 },
+        },
+      ],
+    });
+  });
+
+  it("preserves mixed visible text when compat allows it", async () => {
+    const finalMessage = {
+      role: "assistant",
+      stopReason: "stop",
+      content: [
+        {
+          type: "text",
+          text: 'Working...\n\nto=read commentary code\n{"path":"src/index.ts"}\n\nDone.',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() =>
+      createFakeStream({
+        events: [],
+        resultMessage: finalMessage,
+      }),
+    );
+
+    const stream = await invokeWrappedStream({
+      baseFn,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+          allowMixedText: true,
+        },
+      },
+      allowedToolNames: new Set(["read"]),
+    });
+
+    const result = await stream.result();
+
+    expect(result).toEqual({
+      role: "assistant",
+      stopReason: "toolUse",
+      content: [
+        { type: "text", text: "Working...\n\nDone." },
+        {
+          type: "toolCall",
+          id: "compat_text_call_1",
+          name: "read",
+          arguments: { path: "src/index.ts" },
+        },
+      ],
+    });
   });
 });
 

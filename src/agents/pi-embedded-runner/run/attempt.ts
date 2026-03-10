@@ -10,6 +10,7 @@ import {
 import { resolveHeartbeatPrompt } from "../../../auto-reply/heartbeat.js";
 import { resolveChannelCapabilities } from "../../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../../config/config.js";
+import type { ModelCompatConfig } from "../../../config/types.models.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
 import { ensureGlobalUndiciStreamTimeouts } from "../../../infra/net/undici-global-dispatcher.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
@@ -86,6 +87,7 @@ import {
 } from "../../skills.js";
 import { buildSystemPromptParams } from "../../system-prompt-params.js";
 import { buildSystemPromptReport } from "../../system-prompt-report.js";
+import { applyTextToolCallCompatToTextBlock } from "../../text-tool-call-compat.js";
 import { sanitizeToolCallIdsForCloudCodeAssist } from "../../tool-call-id.js";
 import { resolveEffectiveToolFsWorkspaceOnly } from "../../tool-fs-policy.js";
 import { normalizeToolName } from "../../tool-policy.js";
@@ -534,6 +536,145 @@ function wrapStreamFnDecodeXaiToolCallArguments(baseFn: StreamFn): StreamFn {
       );
     }
     return wrapStreamDecodeXaiToolCallArguments(maybeStream);
+  };
+}
+
+function applyTextToolCallCompatToAssistantMessage(params: {
+  message: unknown;
+  compat?: ModelCompatConfig;
+  allowedToolNames?: Set<string>;
+}): void {
+  if (!params.message || typeof params.message !== "object") {
+    return;
+  }
+  const content = (params.message as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return;
+  }
+
+  const nextContent: unknown[] = [];
+  let changed = false;
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      nextContent.push(block);
+      continue;
+    }
+    const typedBlock = block as { type?: unknown; text?: unknown };
+    if (typedBlock.type !== "text" || typeof typedBlock.text !== "string") {
+      nextContent.push(block);
+      continue;
+    }
+    const compatResult = applyTextToolCallCompatToTextBlock({
+      text: typedBlock.text,
+      compat: params.compat?.textToolCalls,
+      allowedToolNames: params.allowedToolNames,
+    });
+    if (
+      compatResult.content.length === 1 &&
+      compatResult.content[0]?.type === "text" &&
+      compatResult.content[0].text === typedBlock.text
+    ) {
+      nextContent.push(block);
+      continue;
+    }
+    changed = true;
+    for (const compatBlock of compatResult.content) {
+      if (compatBlock.type === "text") {
+        nextContent.push({ ...block, text: compatBlock.text });
+      } else {
+        nextContent.push(compatBlock);
+      }
+    }
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  (params.message as { content: unknown[] }).content = nextContent;
+  const hasToolCalls = nextContent.some((block) => {
+    return (
+      !!block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall"
+    );
+  });
+  if (hasToolCalls && (params.message as { stopReason?: unknown }).stopReason === "stop") {
+    (params.message as { stopReason?: string }).stopReason = "toolUse";
+  }
+}
+
+function wrapStreamApplyTextToolCallCompat(
+  stream: ReturnType<typeof streamSimple>,
+  compat?: ModelCompatConfig,
+  allowedToolNames?: Set<string>,
+): ReturnType<typeof streamSimple> {
+  const originalResult = stream.result.bind(stream);
+  stream.result = async () => {
+    const message = await originalResult();
+    applyTextToolCallCompatToAssistantMessage({ message, compat, allowedToolNames });
+    return message;
+  };
+
+  const originalAsyncIterator = stream[Symbol.asyncIterator].bind(stream);
+  (stream as { [Symbol.asyncIterator]: typeof originalAsyncIterator })[Symbol.asyncIterator] =
+    function () {
+      const iterator = originalAsyncIterator();
+      return {
+        async next() {
+          const result = await iterator.next();
+          if (!result.done && result.value && typeof result.value === "object") {
+            const event = result.value as {
+              type?: unknown;
+              message?: unknown;
+              error?: unknown;
+            };
+            if (event.type === "done") {
+              applyTextToolCallCompatToAssistantMessage({
+                message: event.message,
+                compat,
+                allowedToolNames,
+              });
+              if (
+                event.message &&
+                typeof event.message === "object" &&
+                (event.message as { stopReason?: unknown }).stopReason === "toolUse"
+              ) {
+                (event as { reason?: unknown }).reason = "toolUse";
+              }
+            } else if (event.type === "error") {
+              applyTextToolCallCompatToAssistantMessage({
+                message: event.error,
+                compat,
+                allowedToolNames,
+              });
+            }
+          }
+          return result;
+        },
+        async return(value?: unknown) {
+          return iterator.return?.(value) ?? { done: true as const, value: undefined };
+        },
+        async throw(error?: unknown) {
+          return iterator.throw?.(error) ?? { done: true as const, value: undefined };
+        },
+      };
+    };
+
+  return stream;
+}
+
+export function wrapStreamFnApplyTextToolCallCompat(
+  baseFn: StreamFn,
+  compat?: ModelCompatConfig,
+  allowedToolNames?: Set<string>,
+): StreamFn {
+  return (model, context, options) => {
+    const maybeStream = baseFn(model, context, options);
+    if (maybeStream && typeof maybeStream === "object" && "then" in maybeStream) {
+      return Promise.resolve(maybeStream).then((stream) =>
+        wrapStreamApplyTextToolCallCompat(stream, compat, allowedToolNames),
+      );
+    }
+    return wrapStreamApplyTextToolCallCompat(maybeStream, compat, allowedToolNames);
   };
 }
 
@@ -1363,6 +1504,14 @@ export async function runEmbeddedAttempt(
           } as unknown;
           return inner(model, nextContext as typeof context, options);
         };
+      }
+
+      if (params.model.api === "openai-responses") {
+        activeSession.agent.streamFn = wrapStreamFnApplyTextToolCallCompat(
+          activeSession.agent.streamFn,
+          params.model.compat,
+          allowedToolNames,
+        );
       }
 
       // Some models emit tool names with surrounding whitespace (e.g. " read ").
