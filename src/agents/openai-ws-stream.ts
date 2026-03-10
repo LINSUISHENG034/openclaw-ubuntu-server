@@ -32,6 +32,7 @@ import type {
   ToolCall,
 } from "@mariozechner/pi-ai";
 import { createAssistantMessageEventStream, streamSimple } from "@mariozechner/pi-ai";
+import type { ModelCompatConfig } from "../config/types.models.js";
 import {
   OpenAIWebSocketManager,
   type ContentPart,
@@ -47,6 +48,7 @@ import {
   buildUsageWithNoCost,
   buildStreamErrorAssistantMessage,
 } from "./stream-message-shared.js";
+import { applyTextToolCallCompatToTextBlock } from "./text-tool-call-compat.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-session state
@@ -286,7 +288,8 @@ export function convertMessagesToInputItems(messages: Message[]): InputItem[] {
 
 export function buildAssistantMessageFromResponse(
   response: ResponseObject,
-  modelInfo: { api: string; provider: string; id: string },
+  modelInfo: { api: string; provider: string; id: string; compat?: ModelCompatConfig },
+  options?: { allowedToolNames?: Set<string> },
 ): AssistantMessage {
   const content: (TextContent | ToolCall)[] = [];
 
@@ -294,7 +297,12 @@ export function buildAssistantMessageFromResponse(
     if (item.type === "message") {
       for (const part of item.content ?? []) {
         if (part.type === "output_text" && part.text) {
-          content.push({ type: "text", text: part.text });
+          const compatResult = applyTextToolCallCompatToTextBlock({
+            text: part.text,
+            compat: modelInfo.compat?.textToolCalls,
+            allowedToolNames: options?.allowedToolNames,
+          });
+          content.push(...compatResult.content);
         }
       }
     } else if (item.type === "function_call") {
@@ -554,6 +562,11 @@ export function createOpenAIWebSocketStreamFn(
 
       // ── 4. Build & send response.create ──────────────────────────────────
       const tools = convertTools(context.tools);
+      const allowedToolNames = new Set(
+        (context.tools ?? [])
+          .map((tool) => toNonEmptyString(tool.name))
+          .filter((name): name is string => Boolean(name)),
+      );
 
       // Forward generation options that the HTTP path (openai-responses provider) also uses.
       // Cast to record since SimpleStreamOptions carries openai-specific fields as unknown.
@@ -671,11 +684,18 @@ export function createOpenAIWebSocketStreamFn(
             // Update session state
             session.lastContextLength = capturedContextLength;
             // Build and emit the assistant message
-            const assistantMsg = buildAssistantMessageFromResponse(event.response, {
-              api: model.api,
-              provider: model.provider,
-              id: model.id,
-            });
+            const assistantMsg = buildAssistantMessageFromResponse(
+              event.response,
+              {
+                api: model.api,
+                provider: model.provider,
+                id: model.id,
+                compat: model.compat,
+              },
+              {
+                allowedToolNames,
+              },
+            );
             const reason: Extract<StopReason, "stop" | "length" | "toolUse"> =
               assistantMsg.stopReason === "toolUse" ? "toolUse" : "stop";
             eventStream.push({ type: "done", reason, message: assistantMsg });

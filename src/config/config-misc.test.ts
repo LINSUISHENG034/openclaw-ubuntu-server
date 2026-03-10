@@ -325,6 +325,36 @@ describe("model compat config schema", () => {
 
     expect(res.ok).toBe(true);
   });
+
+  it("accepts text tool-call compat fields", () => {
+    const res = validateConfigObject({
+      models: {
+        providers: {
+          local: {
+            baseUrl: "http://127.0.0.1:1234/v1",
+            api: "openai-responses",
+            models: [
+              {
+                id: "gpt-5.4",
+                name: "GPT 5.4",
+                compat: {
+                  textToolCalls: {
+                    enabled: true,
+                    formats: ["codex_commentary_v1"],
+                    requireKnownToolName: true,
+                    allowMixedText: true,
+                    maxCallsPerMessage: 4,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(res.ok).toBe(true);
+  });
 });
 
 describe("config paths", () => {

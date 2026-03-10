@@ -182,6 +182,17 @@ export const SecretsConfigSchema = z
 
 export const ModelApiSchema = z.enum(MODEL_APIS);
 
+export const TextToolCallCompatSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    formats: z.array(z.literal("codex_commentary_v1")).optional(),
+    requireKnownToolName: z.boolean().optional(),
+    allowMixedText: z.boolean().optional(),
+    maxCallsPerMessage: z.number().int().positive().optional(),
+  })
+  .strict()
+  .optional();
+
 export const ModelCompatSchema = z
   .object({
     supportsStore: z.boolean().optional(),
@@ -199,6 +210,7 @@ export const ModelCompatSchema = z
     requiresThinkingAsText: z.boolean().optional(),
     requiresMistralToolIds: z.boolean().optional(),
     requiresOpenAiAnthropicToolPayload: z.boolean().optional(),
+    textToolCalls: TextToolCallCompatSchema,
   })
   .strict()
   .optional();

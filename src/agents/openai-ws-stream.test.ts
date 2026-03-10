@@ -572,6 +572,103 @@ describe("buildAssistantMessageFromResponse", () => {
     expect(msg.stopReason).toBe("toolUse");
   });
 
+  it("keeps pseudo-tool text as text when compat is disabled", () => {
+    const response = makeResponseObject(
+      "resp_compat_off",
+      'to=exec commentary code\n{"command":"pwd","yieldMs":1000}',
+    );
+    const msg = buildAssistantMessageFromResponse(response, modelInfo);
+
+    expect(msg.content).toEqual([
+      {
+        type: "text",
+        text: 'to=exec commentary code\n{"command":"pwd","yieldMs":1000}',
+      },
+    ]);
+    expect(msg.stopReason).toBe("stop");
+  });
+
+  it("converts pseudo-tool text to toolCall when compat is enabled", () => {
+    const response = makeResponseObject(
+      "resp_compat_on",
+      'to=exec commentary code\n{"command":"pwd","yieldMs":1000}',
+    );
+    const msg = buildAssistantMessageFromResponse(response, {
+      ...modelInfo,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(msg.content).toEqual([
+      {
+        type: "toolCall",
+        id: "compat_text_call_1",
+        name: "exec",
+        arguments: { command: "pwd", yieldMs: 1000 },
+      },
+    ]);
+    expect(msg.stopReason).toBe("toolUse");
+  });
+
+  it("preserves visible text when compat extracts a mixed pseudo-tool call", () => {
+    const response = makeResponseObject(
+      "resp_compat_mixed",
+      'Running now.\n\nto=exec commentary code\n{"command":"pwd"}\n\nDone.',
+    );
+    const msg = buildAssistantMessageFromResponse(
+      response,
+      {
+        ...modelInfo,
+        compat: {
+          textToolCalls: {
+            enabled: true,
+            formats: ["codex_commentary_v1"],
+            allowMixedText: true,
+          },
+        },
+      },
+      { allowedToolNames: new Set(["exec"]) },
+    );
+
+    expect(msg.content).toEqual([
+      { type: "text", text: "Running now.\n\nDone." },
+      {
+        type: "toolCall",
+        id: "compat_text_call_1",
+        name: "exec",
+        arguments: { command: "pwd" },
+      },
+    ]);
+    expect(msg.stopReason).toBe("toolUse");
+  });
+
+  it("keeps native function_call handling unchanged when compat is enabled", () => {
+    const response = makeResponseObject("resp_native_tool", undefined, "exec");
+    const msg = buildAssistantMessageFromResponse(response, {
+      ...modelInfo,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(msg.content).toEqual([
+      {
+        type: "toolCall",
+        id: "call_abc",
+        name: "exec",
+        arguments: { arg: "value" },
+      },
+    ]);
+    expect(msg.stopReason).toBe("toolUse");
+  });
+
   it("maps usage tokens correctly", () => {
     const response = makeResponseObject("resp_5", "Hello");
     const msg = buildAssistantMessageFromResponse(response, modelInfo);

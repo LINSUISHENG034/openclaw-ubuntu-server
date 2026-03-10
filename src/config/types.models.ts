@@ -13,6 +13,16 @@ export const MODEL_APIS = [
 
 export type ModelApi = (typeof MODEL_APIS)[number];
 
+export type TextToolCallFormat = "codex_commentary_v1";
+
+export type TextToolCallCompatConfig = {
+  enabled?: boolean;
+  formats?: TextToolCallFormat[];
+  requireKnownToolName?: boolean;
+  allowMixedText?: boolean;
+  maxCallsPerMessage?: number;
+};
+
 export type ModelCompatConfig = {
   supportsStore?: boolean;
   supportsDeveloperRole?: boolean;
@@ -27,6 +37,7 @@ export type ModelCompatConfig = {
   requiresThinkingAsText?: boolean;
   requiresMistralToolIds?: boolean;
   requiresOpenAiAnthropicToolPayload?: boolean;
+  textToolCalls?: TextToolCallCompatConfig;
 };
 
 export type ModelProviderAuthMode = "api-key" | "aws-sdk" | "oauth" | "token";

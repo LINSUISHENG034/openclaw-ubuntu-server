@@ -713,6 +713,18 @@ export const FIELD_HELP: Record<string, string> = {
     "When true, credentials are sent via the HTTP Authorization header even if alternate auth is possible. Use this only when your provider or proxy explicitly requires Authorization forwarding.",
   "models.providers.*.models":
     "Declared model list for a provider including identifiers, metadata, and optional compatibility/cost hints. Keep IDs exact to provider catalog values so selection and fallback resolve correctly.",
+  "models.providers.*.models[].compat.textToolCalls":
+    "Optional text tool-call compatibility layer for models that emit tool requests as plain text instead of native structured tool calls. Leave this off by default and enable it only for specific non-standard providers or model versions you have verified.",
+  "models.providers.*.models[].compat.textToolCalls.enabled":
+    "Enables text tool-call normalization for this model when true. This only converts supported text protocols into internal tool calls and does not bypass existing tool permissions, approvals, or allowlists.",
+  "models.providers.*.models[].compat.textToolCalls.formats":
+    'Ordered list of supported text tool-call formats to parse for this model, such as "codex_commentary_v1". Keep this list narrow so only known provider-specific text protocols are interpreted as tool calls.',
+  "models.providers.*.models[].compat.textToolCalls.requireKnownToolName":
+    "When true, only tool names already available to the active run are accepted from text-form tool calls. Keep this enabled unless a specific provider needs looser compatibility behavior during controlled testing.",
+  "models.providers.*.models[].compat.textToolCalls.allowMixedText":
+    "Allows visible assistant text to remain alongside extracted text-form tool calls in the same message. Enable this only for providers that mix natural-language status text with pseudo tool-call blocks in one assistant response.",
+  "models.providers.*.models[].compat.textToolCalls.maxCallsPerMessage":
+    "Maximum number of text-form tool calls parsed from a single assistant message before later matches are ignored. Use a small cap to limit malformed-output fallout and keep compatibility handling predictable.",
   "models.bedrockDiscovery":
     "Automatic AWS Bedrock model discovery settings used to synthesize provider model entries from account visibility. Keep discovery scoped and refresh intervals conservative to reduce API churn.",
   "models.bedrockDiscovery.enabled":

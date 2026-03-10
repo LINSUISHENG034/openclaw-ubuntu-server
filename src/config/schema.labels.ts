@@ -421,6 +421,17 @@ export const FIELD_LABELS: Record<string, string> = {
   "models.providers.*.headers": "Model Provider Headers",
   "models.providers.*.authHeader": "Model Provider Authorization Header",
   "models.providers.*.models": "Model Provider Model List",
+  "models.providers.*.models[].compat.textToolCalls": "Model Text Tool-Call Compatibility",
+  "models.providers.*.models[].compat.textToolCalls.enabled":
+    "Model Text Tool-Call Compatibility Enabled",
+  "models.providers.*.models[].compat.textToolCalls.formats":
+    "Model Text Tool-Call Compatibility Formats",
+  "models.providers.*.models[].compat.textToolCalls.requireKnownToolName":
+    "Model Text Tool-Call Require Known Tool Name",
+  "models.providers.*.models[].compat.textToolCalls.allowMixedText":
+    "Model Text Tool-Call Allow Mixed Text",
+  "models.providers.*.models[].compat.textToolCalls.maxCallsPerMessage":
+    "Model Text Tool-Call Max Calls Per Message",
   "models.bedrockDiscovery": "Bedrock Model Discovery",
   "models.bedrockDiscovery.enabled": "Bedrock Discovery Enabled",
   "models.bedrockDiscovery.region": "Bedrock Discovery Region",
