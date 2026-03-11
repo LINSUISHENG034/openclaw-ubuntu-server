@@ -798,14 +798,11 @@ export function buildFoxcodeCompatExtraSystemPrompt(params: {
   }
 
   return [
-    "Foxcode tool-call compatibility is enabled for this run.",
-    "When you need a tool, do not describe the intended action in natural language before or instead of the tool request.",
-    "Emit a parseable tool request immediately using one of these formats only:",
-    '- `to=<tool> {"arg":"value"}`',
-    '- `{"tool":"<tool>","args":{...}}`',
-    "Do not emit bracket summaries like `[Tool call: ...]`.",
-    "Do not emit `NO_REPLY` when a tool call is required.",
-    "If no tool is needed, answer normally.",
+    "Foxcode tool-call compatibility is enabled.",
+    'If a tool is needed, emit it immediately in exactly one of these forms: `to=<tool> {"arg":"value"}` or `{"tool":"<tool>","args":{...}}`.',
+    "Do not describe the tool in natural language first.",
+    "Do not emit bracket summaries like `[Tool call: ...]`, and do not emit `NO_REPLY` when a tool call is required.",
+    "If no tool is needed, answer normally; once your user-facing answer is complete, do not call more tools after it.",
   ].join("\n");
 }
 
@@ -841,11 +838,11 @@ export function buildFoxcodeCompatBootstrapContainmentPrompt(params: {
   }
 
   return [
-    "This is a fresh real user turn on an external messaging channel.",
-    "Treat BOOTSTRAP.md as background context only, not as a script for what to say first.",
+    "This is a fresh external user turn.",
+    "Treat BOOTSTRAP.md as background context only.",
     "Do not output a bootstrap greeting, startup line, onboarding questionnaire, or identity-setup prompt as your main reply.",
-    'Do not say things like "Hey. I just came online", "Who am I, and who are you?", or ask the user to choose your name, creature, vibe, or emoji unless they explicitly asked for that.',
-    "Reply directly to the user's actual message in a normal assistant voice.",
+    'Do not say things like "Hey. I just came online" or "Who am I, and who are you?" unless the user explicitly asked for that.',
+    "Reply directly to the user's actual message.",
   ].join("\n");
 }
 

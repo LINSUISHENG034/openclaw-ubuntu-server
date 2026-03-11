@@ -17,6 +17,7 @@ import {
   extractAssistantText,
   extractAssistantThinking,
   formatReasoningMessage,
+  normalizeAssistantUserFacingText,
 } from "../../pi-embedded-utils.js";
 import { isLikelyMutatingToolName } from "../../tool-mutation.js";
 
@@ -248,14 +249,18 @@ export function buildEmbeddedRunPayloads(params: {
     }
     return isRawApiErrorPayload(trimmed);
   };
-  const answerTexts = suppressAssistantArtifacts
+  const rawAnswerTexts = suppressAssistantArtifacts
     ? []
-    : (params.assistantTexts.length
-        ? params.assistantTexts
-        : fallbackAnswerText
-          ? [fallbackAnswerText]
-          : []
-      ).filter((text) => !shouldSuppressRawErrorText(text));
+    : params.assistantTexts.length
+      ? params.assistantTexts
+      : fallbackAnswerText
+        ? [fallbackAnswerText]
+        : [];
+  const answerTexts = rawAnswerTexts
+    .filter((text) => !shouldSuppressRawErrorText(text))
+    .map((text) => normalizeAssistantUserFacingText(text, { errorContext: lastAssistantErrored }))
+    .filter(Boolean)
+    .filter((text) => !shouldSuppressRawErrorText(text));
 
   let hasUserFacingAssistantReply = false;
   for (const text of answerTexts) {

@@ -268,6 +268,14 @@ export function handleMessageEnd(
     return;
   }
   promoteThinkingTagsToBlocks(assistantMessage);
+  const hasToolCalls = Array.isArray(assistantMessage.content)
+    ? assistantMessage.content.some((block) => {
+        return (
+          !!block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall"
+        );
+      })
+    : false;
+  const isToolUseAssistant = assistantMessage.stopReason === "toolUse" && hasToolCalls;
 
   const rawText = extractAssistantText(assistantMessage);
   appendRawStream({
@@ -278,6 +286,14 @@ export function handleMessageEnd(
     rawText,
     rawThinking: extractAssistantThinking(assistantMessage),
   });
+
+  // Providers like Foxcode can emit user-facing-looking text in the same
+  // assistant message that also requests tools (`stopReason: "toolUse"`).
+  // Treat that message as intermediate only: the real user-facing answer
+  // should come from the later assistant stop message after tools finish.
+  if (isToolUseAssistant) {
+    return;
+  }
 
   const text = resolveSilentReplyFallbackText({
     text: ctx.stripBlockTags(rawText, { thinking: false, final: false }),

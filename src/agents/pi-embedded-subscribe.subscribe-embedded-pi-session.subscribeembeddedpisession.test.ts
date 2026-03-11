@@ -106,7 +106,7 @@ describe("subscribeEmbeddedPiSession", () => {
 
   it.each(THINKING_TAG_CASES)(
     "streams <%s> reasoning via onReasoningStream without leaking into final text",
-    ({ open, close }) => {
+    async ({ open, close }) => {
       const onReasoningStream = vi.fn();
       const onBlockReply = vi.fn();
 
@@ -132,6 +132,7 @@ describe("subscribeEmbeddedPiSession", () => {
       } as AssistantMessage;
 
       emit({ type: "message_end", message: assistantMessage });
+      await Promise.resolve();
 
       expect(onBlockReply).toHaveBeenCalledTimes(1);
       expect(onBlockReply.mock.calls[0][0].text).toBe("Final answer");
@@ -149,7 +150,7 @@ describe("subscribeEmbeddedPiSession", () => {
   );
   it.each(THINKING_TAG_CASES)(
     "suppresses <%s> blocks across chunk boundaries",
-    ({ open, close }) => {
+    async ({ open, close }) => {
       const onBlockReply = vi.fn();
 
       const { emit } = createSubscribedHarness({
@@ -174,6 +175,7 @@ describe("subscribeEmbeddedPiSession", () => {
         message: { role: "assistant" },
         assistantMessageEvent: { type: "text_end" },
       });
+      await Promise.resolve();
 
       const payloadTexts = onBlockReply.mock.calls
         .map((call) => call[0]?.text)

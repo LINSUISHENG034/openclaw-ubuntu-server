@@ -150,6 +150,7 @@ describe("buildFoxcodeCompatExtraSystemPrompt", () => {
     expect(prompt).toContain('`to=<tool> {"arg":"value"}`');
     expect(prompt).toContain('`{"tool":"<tool>","args":{...}}`');
     expect(prompt).toContain("Do not emit bracket summaries");
+    expect(prompt).toContain("do not call more tools after it");
   });
 
   it("does not add provider-specific guidance when compat is disabled", () => {

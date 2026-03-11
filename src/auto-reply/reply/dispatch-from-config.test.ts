@@ -614,6 +614,37 @@ describe("dispatchReplyFromConfig", () => {
     expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(1);
   });
 
+  it("drops late tool results after a final reply was already queued in DM sessions", async () => {
+    setNoAbort();
+    const cfg = emptyConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      ChatType: "direct",
+    });
+
+    let onToolResult: GetReplyOptions["onToolResult"];
+    const replyResolver = async (
+      _ctx: MsgContext,
+      opts?: GetReplyOptions,
+      _cfg?: OpenClawConfig,
+    ) => {
+      onToolResult = opts?.onToolResult;
+      return { text: "done" } satisfies ReplyPayload;
+    };
+
+    const sendFinalReply = dispatcher.sendFinalReply as ReturnType<typeof vi.fn>;
+    sendFinalReply.mockImplementation((payload: ReplyPayload) => {
+      void onToolResult?.({ text: "good-sage completed 3s :: bash ..." });
+      return Boolean(payload);
+    });
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledTimes(1);
+    expect(dispatcher.sendToolResult).not.toHaveBeenCalled();
+  });
+
   it("suppresses native tool summaries but still forwards tool media", async () => {
     setNoAbort();
     const cfg = emptyConfig;
@@ -1904,5 +1935,27 @@ describe("dispatchReplyFromConfig", () => {
     await dispatchReplyFromConfig({ ctx, cfg: emptyConfig, dispatcher, replyResolver });
     expect(blockReplySentTexts).not.toContain("Reasoning:\n_thinking..._");
     expect(blockReplySentTexts).toContain("The answer is 42");
+  });
+
+  it("drops late tool results after a substantive block reply was already sent", async () => {
+    setNoAbort();
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({ Provider: "telegram", ChatType: "direct" });
+
+    const replyResolver = async (
+      _ctx: MsgContext,
+      opts?: GetReplyOptions,
+    ): Promise<ReplyPayload> => {
+      await opts?.onBlockReply?.({ text: "已连接并播放测试音了。" });
+      await opts?.onToolResult?.({ text: "good-sage completed 3s :: bash ..." });
+      return { text: "NO_REPLY" };
+    };
+
+    await dispatchReplyFromConfig({ ctx, cfg: emptyConfig, dispatcher, replyResolver });
+
+    expect(dispatcher.sendBlockReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "已连接并播放测试音了。" }),
+    );
+    expect(dispatcher.sendToolResult).not.toHaveBeenCalled();
   });
 });

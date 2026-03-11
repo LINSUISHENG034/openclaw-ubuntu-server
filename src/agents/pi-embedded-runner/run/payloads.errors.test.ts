@@ -121,6 +121,32 @@ describe("buildEmbeddedRunPayloads", () => {
     expectSinglePayloadText(payloads, errorJsonPretty.trim());
   });
 
+  it("drops assistantTexts that are only leaked pseudo tool-call text", () => {
+    const payloads = buildPayloads({
+      assistantTexts: ['{"tool":"read","args":{"path":"/tmp/secret"}}'],
+      lastAssistant: makeStoppedAssistant(),
+    });
+
+    expect(payloads).toHaveLength(0);
+  });
+
+  it("strips leaked pseudo tool-call text from outbound answer payloads", () => {
+    const payloads = buildPayloads({
+      assistantTexts: [
+        [
+          "Running diagnostics.",
+          "",
+          '{"tool":"read","args":{"path":"/tmp/secret"}}',
+          "",
+          "Done.",
+        ].join("\n"),
+      ],
+      lastAssistant: makeStoppedAssistant(),
+    });
+
+    expectSinglePayloadText(payloads, "Running diagnostics.\n\nDone.");
+  });
+
   it("adds a fallback error when a tool fails and no assistant output exists", () => {
     const payloads = buildPayloads({
       lastToolError: { toolName: "browser", error: "tab not found" },

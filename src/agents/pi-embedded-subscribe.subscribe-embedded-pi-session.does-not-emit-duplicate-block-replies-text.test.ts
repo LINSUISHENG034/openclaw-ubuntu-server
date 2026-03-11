@@ -9,13 +9,14 @@ import {
 import { subscribeEmbeddedPiSession } from "./pi-embedded-subscribe.js";
 
 describe("subscribeEmbeddedPiSession", () => {
-  it("does not emit duplicate block replies when text_end repeats", () => {
+  it("does not emit duplicate block replies when text_end repeats", async () => {
     const onBlockReply = vi.fn();
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emitAssistantTextDelta({ emit, delta: "Hello block" });
     emitAssistantTextEnd({ emit });
     emitAssistantTextEnd({ emit });
+    await Promise.resolve();
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
     expect(subscription.assistantTexts).toEqual(["Hello block"]);
@@ -60,6 +61,129 @@ describe("subscribeEmbeddedPiSession", () => {
     emit({ type: "message_end", message: assistantMessageTrimmed });
 
     expect(subscription.assistantTexts).toEqual(["Hello world"]);
+  });
+  it("does not store raw pseudo tool-call text from message_end", () => {
+    const { session, emit } = createStubSessionHarness();
+
+    const subscription = subscribeEmbeddedPiSession({
+      session,
+      runId: "run",
+    });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: '{"tool":"read","args":{"path":"/tmp/secret"}}',
+          },
+        ],
+      } as AssistantMessage,
+    });
+
+    expect(subscription.assistantTexts).toEqual([]);
+  });
+  it("keeps visible text while stripping leaked pseudo tool-call text", () => {
+    const { emit, subscription } = createTextEndBlockReplyHarness();
+
+    emitAssistantTextDelta({
+      emit,
+      delta: [
+        "Running diagnostics.",
+        "",
+        '{"tool":"read","args":{"path":"/tmp/secret"}}',
+        "",
+        "Done.",
+      ].join("\n"),
+    });
+    emitAssistantTextEnd({ emit });
+
+    expect(subscription.assistantTexts).toEqual(["Running diagnostics.\n\nDone."]);
+  });
+  it("does not emit raw pseudo tool-call text through streamed assistant updates", async () => {
+    const onBlockReply = vi.fn();
+    const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
+
+    emitAssistantTextDelta({
+      emit,
+      delta: 'to=exec commentary code\n{"command":"pwd","yieldMs":1000}\n\nDone.',
+    });
+    emitAssistantTextEnd({ emit });
+    await Promise.resolve();
+
+    expect(subscription.assistantTexts).toEqual(["Done."]);
+    expect(onBlockReply).toHaveBeenCalledWith(expect.objectContaining({ text: "Done." }));
+  });
+  it("does not store assistant text from toolUse message_end", () => {
+    const { session, emit } = createStubSessionHarness();
+
+    const subscription = subscribeEmbeddedPiSession({
+      session,
+      runId: "run",
+    });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [
+          {
+            type: "text",
+            text: "[[reply_to_current]] 我先直接查主机上的蓝牙与音频状态。",
+          },
+          {
+            type: "toolCall",
+            id: "tool_1",
+            name: "exec",
+            arguments: { command: "bluetoothctl info 24:C4:06:FA:00:37" },
+          },
+        ],
+      } as AssistantMessage,
+    });
+
+    expect(subscription.assistantTexts).toEqual([]);
+  });
+  it("keeps only the later stop reply when a toolUse assistant message carried early answer text", () => {
+    const { session, emit } = createStubSessionHarness();
+
+    const subscription = subscribeEmbeddedPiSession({
+      session,
+      runId: "run",
+    });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [
+          {
+            type: "text",
+            text: "[[reply_to_current]] 晚上好，林先森，我先查一下。",
+          },
+          {
+            type: "toolCall",
+            id: "tool_1",
+            name: "read",
+            arguments: { path: "/tmp/USER.md" },
+          },
+        ],
+      } as AssistantMessage,
+    });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "stop",
+        content: [{ type: "text", text: "[[reply_to_current]] Result: 设备已连接。" }],
+      } as AssistantMessage,
+    });
+
+    expect(subscription.assistantTexts).toEqual(["[[reply_to_current]] Result: 设备已连接。"]);
   });
   it("does not duplicate assistantTexts when message_end repeats with reasoning blocks", () => {
     const { session, emit } = createStubSessionHarness();

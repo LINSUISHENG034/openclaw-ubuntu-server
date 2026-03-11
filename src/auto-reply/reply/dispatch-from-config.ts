@@ -234,6 +234,19 @@ export async function dispatchReplyFromConfig(params: {
   const shouldSuppressTyping =
     shouldRouteToOriginating || originatingChannel === INTERNAL_MESSAGE_CHANNEL;
   const ttsChannel = shouldRouteToOriginating ? originatingChannel : currentSurface;
+  let assistantReplyDelivered = false;
+
+  const hasExecApprovalPayload = (payload: ReplyPayload): boolean => {
+    const execApproval =
+      payload.channelData &&
+      typeof payload.channelData === "object" &&
+      !Array.isArray(payload.channelData)
+        ? payload.channelData.execApproval
+        : undefined;
+    return Boolean(
+      execApproval && typeof execApproval === "object" && !Array.isArray(execApproval),
+    );
+  };
 
   /**
    * Helper to send a payload via route-reply (async).
@@ -245,14 +258,14 @@ export async function dispatchReplyFromConfig(params: {
     payload: ReplyPayload,
     abortSignal?: AbortSignal,
     mirror?: boolean,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     // TypeScript doesn't narrow these from the shouldRouteToOriginating check,
     // but they're guaranteed non-null when this function is called.
     if (!originatingChannel || !originatingTo) {
-      return;
+      return false;
     }
     if (abortSignal?.aborted) {
-      return;
+      return false;
     }
     const result = await routeReply({
       payload,
@@ -270,6 +283,7 @@ export async function dispatchReplyFromConfig(params: {
     if (!result.ok) {
       logVerbose(`dispatch-from-config: route-reply failed: ${result.error ?? "unknown error"}`);
     }
+    return result.ok;
   };
 
   markProcessing();
@@ -423,6 +437,9 @@ export async function dispatchReplyFromConfig(params: {
             if (!deliveryPayload) {
               return;
             }
+            if (assistantReplyDelivered && !hasExecApprovalPayload(deliveryPayload)) {
+              return;
+            }
             if (shouldRouteToOriginating) {
               await sendPayloadAsync(deliveryPayload, undefined, false);
             } else {
@@ -456,9 +473,11 @@ export async function dispatchReplyFromConfig(params: {
               ttsAuto: sessionTtsAuto,
             });
             if (shouldRouteToOriginating) {
-              await sendPayloadAsync(ttsPayload, context?.abortSignal, false);
+              const delivered = await sendPayloadAsync(ttsPayload, context?.abortSignal, false);
+              assistantReplyDelivered = delivered || assistantReplyDelivered;
             } else {
-              dispatcher.sendBlockReply(ttsPayload);
+              assistantReplyDelivered =
+                dispatcher.sendBlockReply(ttsPayload) || assistantReplyDelivered;
             }
           };
           return run();
@@ -530,11 +549,14 @@ export async function dispatchReplyFromConfig(params: {
           );
         }
         queuedFinal = result.ok || queuedFinal;
+        assistantReplyDelivered = result.ok || assistantReplyDelivered;
         if (result.ok) {
           routedFinalCount += 1;
         }
       } else {
-        queuedFinal = dispatcher.sendFinalReply(ttsReply) || queuedFinal;
+        const didQueue = dispatcher.sendFinalReply(ttsReply);
+        queuedFinal = didQueue || queuedFinal;
+        assistantReplyDelivered = didQueue || assistantReplyDelivered;
       }
     }
 
@@ -588,6 +610,7 @@ export async function dispatchReplyFromConfig(params: {
           } else {
             const didQueue = dispatcher.sendFinalReply(ttsOnlyPayload);
             queuedFinal = didQueue || queuedFinal;
+            assistantReplyDelivered = didQueue || assistantReplyDelivered;
           }
         }
       } catch (err) {

@@ -1,6 +1,10 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { describe, expect, it } from "vitest";
-import { extractAssistantText, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
+import {
+  extractAssistantText,
+  normalizeAssistantUserFacingText,
+  stripDowngradedToolCallText,
+} from "./pi-embedded-utils.js";
 
 function makeAssistantMessage(
   message: Omit<AssistantMessage, "api" | "provider" | "model" | "usage" | "stopReason"> &
@@ -61,6 +65,26 @@ describe("pi-embedded-utils text tool-call compat regressions", () => {
     ].join("\n");
 
     expect(stripDowngradedToolCallText(text)).toBe("Running diagnostics.\n\nDone.");
+  });
+
+  it("normalizes raw pseudo tool-call text to empty output", () => {
+    expect(normalizeAssistantUserFacingText('{"tool":"read","args":{"path":"/tmp/secret"}}')).toBe(
+      "",
+    );
+  });
+
+  it("preserves prose around leaked pseudo tool-call text", () => {
+    expect(
+      normalizeAssistantUserFacingText(
+        [
+          "Running diagnostics.",
+          "",
+          '{"tool":"read","args":{"path":"/tmp/secret"}}',
+          "",
+          "Done.",
+        ].join("\n"),
+      ),
+    ).toBe("Running diagnostics.\n\nDone.");
   });
 
   it("does not surface commentary-only pseudo-call text", () => {

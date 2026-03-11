@@ -72,10 +72,25 @@ export function stripDowngradedToolCallText(text: string): string {
   if (
     !/\[Tool (?:Call|Result)/i.test(text) &&
     !/\[Historical context/i.test(text) &&
-    !/(?:^|\n)to=[a-z0-9_:-]+[^\n]*\n/i.test(text)
+    !/(?:^|\n)to=[a-z0-9_:-]+[^\n]*\n/i.test(text) &&
+    !/(?:^|\n)[ \t]*\{\s*"tool"\s*:/i.test(text)
   ) {
     return text;
   }
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+  const isPseudoToolCallObject = (value: unknown): boolean => {
+    if (!isRecord(value)) {
+      return false;
+    }
+    if (typeof value.tool !== "string" || !value.tool.trim()) {
+      return false;
+    }
+    const args = value.args ?? value.arguments ?? value.input ?? value.params;
+    return isRecord(args);
+  };
 
   const consumeJsonish = (
     input: string,
@@ -243,9 +258,47 @@ export function stripDowngradedToolCallText(text: string): string {
     return result;
   };
 
+  const stripPseudoToolJsonObjects = (input: string): string => {
+    const markerRe = /(^|\n)[ \t]*\{/g;
+    let result = "";
+    let cursor = 0;
+    for (const match of input.matchAll(markerRe)) {
+      const prefix = match[1] ?? "";
+      const matchIndex = match.index ?? 0;
+      const start = matchIndex + prefix.length;
+      if (start < cursor) {
+        continue;
+      }
+      const end = consumeJsonish(input, start);
+      if (end === null) {
+        continue;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(input.slice(start, end));
+      } catch {
+        continue;
+      }
+      if (!isPseudoToolCallObject(parsed)) {
+        continue;
+      }
+
+      result += input.slice(cursor, start);
+      let nextIndex = end;
+      while (nextIndex < input.length && (input[nextIndex] === "\n" || input[nextIndex] === "\r")) {
+        nextIndex += 1;
+      }
+      cursor = nextIndex;
+    }
+    result += input.slice(cursor);
+    return result;
+  };
+
   // Remove [Tool Call: name (ID: ...)] blocks and their Arguments.
   let cleaned = stripToolCalls(text);
   cleaned = stripCodexToolCalls(cleaned);
+  cleaned = stripPseudoToolJsonObjects(cleaned);
 
   // Remove [Tool Result for ID ...] blocks and their content.
   cleaned = cleaned.replace(/\[Tool Result for ID[^\]]*\]\n?[\s\S]*?(?=\n*\[Tool |\n*$)/gi, "");
@@ -265,14 +318,21 @@ export function stripThinkingTagsFromText(text: string): string {
   return stripReasoningTagsFromText(text, { mode: "strict", trim: "both" });
 }
 
+export function normalizeAssistantUserFacingText(
+  text: string,
+  opts?: { errorContext?: boolean },
+): string {
+  const stripped = stripThinkingTagsFromText(
+    stripDowngradedToolCallText(stripModelSpecialTokens(stripMinimaxToolCallXml(text))),
+  ).trim();
+  return sanitizeUserFacingText(stripped, { errorContext: opts?.errorContext });
+}
+
 export function extractAssistantText(msg: AssistantMessage): string {
   const extracted =
     extractTextFromChatContent(msg.content, {
       includeTextBlock: (block) => resolveChatTextBlockPhase(block) !== "commentary",
-      sanitizeText: (text) =>
-        stripThinkingTagsFromText(
-          stripDowngradedToolCallText(stripModelSpecialTokens(stripMinimaxToolCallXml(text))),
-        ).trim(),
+      sanitizeText: (text) => normalizeAssistantUserFacingText(text),
       joinWith: "\n",
       normalizeText: (text) => text.trim(),
     }) ?? "";
