@@ -40,6 +40,72 @@ describe("parseTextToolCalls", () => {
     ]);
   });
 
+  it("extracts inline codex calls with JSON object arguments on the same line", () => {
+    const result = parseTextToolCalls({
+      text: 'to=exec {"command":"pwd","yieldMs":1000}',
+      compat,
+    });
+
+    expect(result.text).toBe("");
+    expect(result.toolCalls).toEqual([
+      {
+        id: "compat_text_call_1",
+        name: "exec",
+        arguments: { command: "pwd", yieldMs: 1000 },
+      },
+    ]);
+  });
+
+  it("extracts json pseudo-call blocks with tool and args fields", () => {
+    const result = parseTextToolCalls({
+      text: [
+        "先确认主机侧控制方法，再动手连蓝牙和出声。",
+        "",
+        '{"tool":"read","args":{"filePath":"/tmp/test.txt"}}',
+      ].join("\n"),
+      compat: {
+        ...compat,
+        allowMixedText: true,
+      },
+      allowedToolNames: new Set(["read"]),
+    });
+
+    expect(result.text).toBe("先确认主机侧控制方法，再动手连蓝牙和出声。");
+    expect(result.toolCalls).toEqual([
+      {
+        id: "compat_text_call_1",
+        name: "read",
+        arguments: { filePath: "/tmp/test.txt" },
+      },
+    ]);
+  });
+
+  it("extracts bracket pseudo-call blocks for read tool invocations", () => {
+    const result = parseTextToolCalls({
+      text: [
+        "先检查主机控制方式。",
+        "",
+        "[Tool call: read `/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md`]",
+      ].join("\n"),
+      compat: {
+        ...compat,
+        allowMixedText: true,
+      },
+      allowedToolNames: new Set(["read"]),
+    });
+
+    expect(result.text).toBe("先检查主机控制方式。");
+    expect(result.toolCalls).toEqual([
+      {
+        id: "compat_text_call_1",
+        name: "read",
+        arguments: {
+          filePath: "/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md",
+        },
+      },
+    ]);
+  });
+
   it("preserves surrounding text when mixed text is allowed", () => {
     const result = parseTextToolCalls({
       text: 'Running now.\n\nto=exec commentary code\n{"command":"pwd"}\n\nDone.',

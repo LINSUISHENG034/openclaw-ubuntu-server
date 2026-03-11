@@ -750,6 +750,31 @@ export function composeSystemPromptWithHookContext(params: {
   );
 }
 
+export function buildFoxcodeCompatExtraSystemPrompt(params: {
+  provider?: string;
+  modelApi?: string;
+  compat?: ModelCompatConfig;
+}): string | undefined {
+  if (
+    params.provider !== "foxcode-codex" ||
+    params.modelApi !== "openai-responses" ||
+    params.compat?.textToolCalls?.enabled !== true
+  ) {
+    return undefined;
+  }
+
+  return [
+    "Foxcode tool-call compatibility is enabled for this run.",
+    "When you need a tool, do not describe the intended action in natural language before or instead of the tool request.",
+    "Emit a parseable tool request immediately using one of these formats only:",
+    '- `to=<tool> {"arg":"value"}`',
+    '- `{"tool":"<tool>","args":{...}}`',
+    "Do not emit bracket summaries like `[Tool call: ...]`.",
+    "Do not emit `NO_REPLY` when a tool call is required.",
+    "If no tool is needed, answer normally.",
+  ].join("\n");
+}
+
 export function resolvePromptModeForSession(sessionKey?: string): "minimal" | "full" {
   if (!sessionKey) {
     return "full";
@@ -1135,12 +1160,21 @@ export async function runEmbeddedAttempt(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
     const ownerDisplay = resolveOwnerDisplaySetting(params.config);
+    const compatExtraSystemPrompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: params.provider,
+      modelApi: params.model.api,
+      compat: params.model.compat,
+    });
+    const mergedExtraSystemPrompt = joinPresentTextSegments(
+      [compatExtraSystemPrompt, params.extraSystemPrompt],
+      { trim: true },
+    );
 
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
       defaultThinkLevel: params.thinkLevel,
       reasoningLevel: params.reasoningLevel ?? "off",
-      extraSystemPrompt: params.extraSystemPrompt,
+      extraSystemPrompt: mergedExtraSystemPrompt,
       ownerNumbers: params.ownerNumbers,
       ownerDisplay: ownerDisplay.ownerDisplay,
       ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,

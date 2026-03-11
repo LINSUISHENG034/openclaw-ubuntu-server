@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../../../config/config.js";
 import { resolveOllamaBaseUrlForRun } from "../../ollama-stream.js";
 import {
   buildAfterTurnRuntimeContext,
+  buildFoxcodeCompatExtraSystemPrompt,
   composeSystemPromptWithHookContext,
   resolvePromptBuildHookResult,
   decodeHtmlEntitiesInObject,
@@ -128,6 +129,36 @@ describe("composeSystemPromptWithHookContext", () => {
         appendSystemContext: "  append only  ",
       }),
     ).toBe("append only");
+  });
+});
+
+describe("buildFoxcodeCompatExtraSystemPrompt", () => {
+  it("returns provider-specific tool protocol guidance for foxcode responses compat", () => {
+    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: "foxcode-codex",
+      modelApi: "openai-responses",
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(prompt).toContain("Foxcode tool-call compatibility is enabled");
+    expect(prompt).toContain('`to=<tool> {"arg":"value"}`');
+    expect(prompt).toContain('`{"tool":"<tool>","args":{...}}`');
+    expect(prompt).toContain("Do not emit bracket summaries");
+  });
+
+  it("does not add provider-specific guidance when compat is disabled", () => {
+    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: "foxcode-codex",
+      modelApi: "openai-responses",
+      compat: {},
+    });
+
+    expect(prompt).toBeUndefined();
   });
 });
 
@@ -582,6 +613,58 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
           id: "compat_text_call_1",
           name: "read",
           arguments: { path: "src/index.ts" },
+        },
+      ],
+    });
+  });
+
+  it("converts json pseudo-call blocks on custom openai-responses providers", async () => {
+    const finalMessage = {
+      role: "assistant",
+      stopReason: "stop",
+      content: [
+        {
+          type: "text",
+          text: [
+            "先确认主机侧控制方法，再动手连蓝牙和出声。",
+            "",
+            '{"tool":"read","args":{"filePath":"/tmp/test.txt"}}',
+          ].join("\n"),
+        },
+      ],
+    };
+    const baseFn = vi.fn(() =>
+      createFakeStream({
+        events: [],
+        resultMessage: finalMessage,
+      }),
+    );
+
+    const stream = await invokeWrappedStream({
+      baseFn,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+          allowMixedText: true,
+          requireKnownToolName: true,
+        },
+      },
+      allowedToolNames: new Set(["read"]),
+    });
+
+    const result = await stream.result();
+
+    expect(result).toEqual({
+      role: "assistant",
+      stopReason: "toolUse",
+      content: [
+        { type: "text", text: "先确认主机侧控制方法，再动手连蓝牙和出声。" },
+        {
+          type: "toolCall",
+          id: "compat_text_call_1",
+          name: "read",
+          arguments: { filePath: "/tmp/test.txt" },
         },
       ],
     });

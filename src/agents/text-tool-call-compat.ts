@@ -98,6 +98,35 @@ function trimMatchedSuffix(text: string, start: number): number {
   return index;
 }
 
+function extractPseudoToolCall(value: Record<string, unknown>): {
+  name: string;
+  arguments: Record<string, unknown>;
+} | null {
+  const tool = value.tool;
+  if (typeof tool !== "string" || !tool.trim()) {
+    return null;
+  }
+  const args = value.args ?? value.arguments ?? value.input ?? value.params;
+  if (!isRecord(args)) {
+    return null;
+  }
+  return {
+    name: tool.trim(),
+    arguments: args,
+  };
+}
+
+function buildBracketPseudoToolArgs(name: string, payload: string): Record<string, unknown> | null {
+  const trimmedName = name.trim();
+  if (trimmedName === "read") {
+    return { filePath: payload };
+  }
+  if (trimmedName === "exec") {
+    return { cmd: payload };
+  }
+  return null;
+}
+
 function parseCodexCommentaryTextToolCalls(params: {
   text: string;
   compat: TextToolCallCompatConfig;
@@ -106,25 +135,34 @@ function parseCodexCommentaryTextToolCalls(params: {
   const diagnostics: TextToolCallCompatDiagnostic[] = [];
   const toolCalls: ParsedTextToolCall[] = [];
   const removals: Array<{ start: number; end: number }> = [];
-  const marker = /(^|\n)to=([A-Za-z0-9_:-]+)[^\n]*(?:\r?\n)+/g;
+  const markers = Array.from(params.text.matchAll(/(^|\n)to=([A-Za-z0-9_:-]+)/g));
+  const jsonMarkers = Array.from(params.text.matchAll(/(^|\n)[ \t]*\{/g));
+  const bracketMarkers = Array.from(
+    params.text.matchAll(/\[Tool call:\s*([A-Za-z0-9_:-]+)\s+`([^`\n]+)`\]/gi),
+  );
   const maxCalls = params.compat.maxCallsPerMessage ?? Number.POSITIVE_INFINITY;
+  let reachedMaxCalls = false;
 
-  for (const match of params.text.matchAll(marker)) {
+  for (const [matchIndex, match] of markers.entries()) {
     if (toolCalls.length >= maxCalls) {
-      diagnostics.push({
-        level: "debug",
-        reason: "max_calls_reached",
-        format: "codex_commentary_v1",
-      });
+      reachedMaxCalls = true;
       break;
     }
 
     const prefix = match[1] ?? "";
     const name = match[2] ?? "";
-    const matchIndex = match.index ?? 0;
-    const commandStart = matchIndex + prefix.length;
-    const jsonStart = matchIndex + match[0].length;
-    const parsed = consumeJsonObject(params.text, jsonStart);
+    const commandIndex = match.index ?? 0;
+    const commandStart = commandIndex + prefix.length;
+    const nextCommandIndex =
+      matchIndex + 1 < markers.length
+        ? (markers[matchIndex + 1]?.index ?? params.text.length)
+        : params.text.length;
+    const toolNameEnd = commandStart + name.length + 3;
+    const braceIndex = params.text.indexOf("{", toolNameEnd);
+    const parsed =
+      braceIndex >= 0 && braceIndex < nextCommandIndex
+        ? consumeJsonObject(params.text, braceIndex)
+        : null;
 
     if (!parsed) {
       diagnostics.push({ level: "debug", reason: "invalid_json", format: "codex_commentary_v1" });
@@ -146,6 +184,100 @@ function parseCodexCommentaryTextToolCalls(params: {
       arguments: parsed.value,
     });
     removals.push({ start: commandStart, end: trimMatchedSuffix(params.text, parsed.end) });
+  }
+
+  for (const match of jsonMarkers) {
+    if (toolCalls.length >= maxCalls) {
+      reachedMaxCalls = true;
+      break;
+    }
+
+    const prefix = match[1] ?? "";
+    const markerIndex = match.index ?? 0;
+    const objectStart = markerIndex + prefix.length;
+    if (removals.some((removal) => objectStart >= removal.start && objectStart < removal.end)) {
+      continue;
+    }
+
+    const parsed = consumeJsonObject(params.text, objectStart);
+    if (!parsed) {
+      continue;
+    }
+    const pseudoToolCall = extractPseudoToolCall(parsed.value);
+    if (!pseudoToolCall) {
+      continue;
+    }
+
+    if (params.compat.requireKnownToolName && !params.allowedToolNames?.has(pseudoToolCall.name)) {
+      diagnostics.push({
+        level: "debug",
+        reason: "unknown_tool_name",
+        format: "codex_commentary_v1",
+      });
+      continue;
+    }
+
+    toolCalls.push({
+      id: `compat_text_call_${toolCalls.length + 1}`,
+      name: pseudoToolCall.name,
+      arguments: pseudoToolCall.arguments,
+    });
+    removals.push({ start: parsed.start, end: trimMatchedSuffix(params.text, parsed.end) });
+  }
+
+  for (const match of bracketMarkers) {
+    if (toolCalls.length >= maxCalls) {
+      reachedMaxCalls = true;
+      break;
+    }
+
+    const start = match.index ?? 0;
+    if (removals.some((removal) => start >= removal.start && start < removal.end)) {
+      continue;
+    }
+
+    const name = (match[1] ?? "").trim();
+    const payload = match[2] ?? "";
+    if (!name || !payload) {
+      continue;
+    }
+
+    if (params.compat.requireKnownToolName && !params.allowedToolNames?.has(name)) {
+      diagnostics.push({
+        level: "debug",
+        reason: "unknown_tool_name",
+        format: "codex_commentary_v1",
+      });
+      continue;
+    }
+
+    const args = buildBracketPseudoToolArgs(name, payload);
+    if (!args) {
+      diagnostics.push({
+        level: "debug",
+        reason: "unsupported_bracket_tool_shape",
+        format: "codex_commentary_v1",
+      });
+      continue;
+    }
+
+    toolCalls.push({
+      id: `compat_text_call_${toolCalls.length + 1}`,
+      name,
+      arguments: args,
+    });
+    removals.push({
+      start,
+      end: trimMatchedSuffix(params.text, start + match[0].length),
+    });
+  }
+
+  if (reachedMaxCalls) {
+    diagnostics.push({
+      level: "debug",
+      reason: "max_calls_reached",
+      format: "codex_commentary_v1",
+    });
   }
 
   if (toolCalls.length === 0 && diagnostics.length === 0) {

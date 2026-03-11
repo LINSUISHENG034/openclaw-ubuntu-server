@@ -2,6 +2,7 @@ import { ReadableStream } from "node:stream/web";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { VoyageBatchOutputLine, VoyageBatchRequest } from "./batch-voyage.js";
 import type { VoyageEmbeddingClient } from "./embeddings-voyage.js";
+import { buildRemoteBaseUrlPolicy } from "./remote-http.js";
 
 // Mock internal.js if needed, but runWithConcurrency is simple enough to keep real.
 // We DO need to mock retryAsync to avoid actual delays/retries logic complicating tests
@@ -24,6 +25,7 @@ describe("runVoyageEmbeddingBatches", () => {
   const mockClient: VoyageEmbeddingClient = {
     baseUrl: "https://api.voyageai.com/v1",
     headers: { Authorization: "Bearer test-key" },
+    ssrfPolicy: buildRemoteBaseUrlPolicy("https://api.voyageai.com/v1"),
     model: "voyage-4-large",
   };
 
