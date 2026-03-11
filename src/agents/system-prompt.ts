@@ -191,6 +191,7 @@ export function buildAgentSystemPrompt(params: {
   defaultThinkLevel?: ThinkLevel;
   reasoningLevel?: ReasoningLevel;
   extraSystemPrompt?: string;
+  postProjectContextSystemPrompt?: string;
   ownerNumbers?: string[];
   ownerDisplay?: OwnerIdDisplay;
   ownerDisplaySecret?: string;
@@ -343,6 +344,7 @@ export function buildAgentSystemPrompt(params: {
   const execToolName = resolveToolName("exec");
   const processToolName = resolveToolName("process");
   const extraSystemPrompt = params.extraSystemPrompt?.trim();
+  const postProjectContextSystemPrompt = params.postProjectContextSystemPrompt?.trim();
   const ownerDisplay = params.ownerDisplay === "hash" ? "hash" : "raw";
   const ownerLine = buildOwnerIdentityLine(
     params.ownerNumbers ?? [],
@@ -646,6 +648,9 @@ export function buildAgentSystemPrompt(params: {
     for (const file of validContextFiles) {
       lines.push(`## ${file.path}`, "", file.content, "");
     }
+  }
+  if (postProjectContextSystemPrompt) {
+    lines.push("## Fresh Session Override", postProjectContextSystemPrompt, "");
   }
 
   // Skip silent replies for subagent/none modes

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../../config/config.js";
 import { resolveOllamaBaseUrlForRun } from "../../ollama-stream.js";
 import {
+  buildFoxcodeCompatBootstrapContainmentPrompt,
   buildAfterTurnRuntimeContext,
   buildFoxcodeCompatExtraSystemPrompt,
   composeSystemPromptWithHookContext,
@@ -162,7 +163,7 @@ describe("buildFoxcodeCompatExtraSystemPrompt", () => {
   });
 
   it("adds bootstrap containment for fresh external-channel foxcode sessions", () => {
-    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
       provider: "foxcode-codex",
       modelApi: "openai-responses",
       messageChannel: "telegram",
@@ -179,7 +180,7 @@ describe("buildFoxcodeCompatExtraSystemPrompt", () => {
   });
 
   it("does not add bootstrap containment for fresh local or web sessions", () => {
-    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
       provider: "foxcode-codex",
       modelApi: "openai-responses",
       messageChannel: "webchat",
@@ -192,11 +193,11 @@ describe("buildFoxcodeCompatExtraSystemPrompt", () => {
       },
     });
 
-    expect(prompt).not.toContain("Do not output a bootstrap greeting");
+    expect(prompt).toBeUndefined();
   });
 
   it("does not add bootstrap containment for non-foxcode providers", () => {
-    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
       provider: "openai",
       modelApi: "openai-responses",
       messageChannel: "telegram",

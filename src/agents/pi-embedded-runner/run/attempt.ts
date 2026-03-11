@@ -797,6 +797,33 @@ export function buildFoxcodeCompatExtraSystemPrompt(params: {
     return undefined;
   }
 
+  return [
+    "Foxcode tool-call compatibility is enabled for this run.",
+    "When you need a tool, do not describe the intended action in natural language before or instead of the tool request.",
+    "Emit a parseable tool request immediately using one of these formats only:",
+    '- `to=<tool> {"arg":"value"}`',
+    '- `{"tool":"<tool>","args":{...}}`',
+    "Do not emit bracket summaries like `[Tool call: ...]`.",
+    "Do not emit `NO_REPLY` when a tool call is required.",
+    "If no tool is needed, answer normally.",
+  ].join("\n");
+}
+
+export function buildFoxcodeCompatBootstrapContainmentPrompt(params: {
+  provider?: string;
+  modelApi?: string;
+  messageChannel?: string;
+  messages?: unknown[];
+  compat?: ModelCompatConfig;
+}): string | undefined {
+  if (
+    params.provider !== "foxcode-codex" ||
+    params.modelApi !== "openai-responses" ||
+    params.compat?.textToolCalls?.enabled !== true
+  ) {
+    return undefined;
+  }
+
   const normalizedChannel = normalizeMessageChannel(params.messageChannel);
   const isFreshExternalChannelSession =
     !!normalizedChannel &&
@@ -809,21 +836,16 @@ export function buildFoxcodeCompatExtraSystemPrompt(params: {
       );
     });
 
+  if (!isFreshExternalChannelSession) {
+    return undefined;
+  }
+
   return [
-    "Foxcode tool-call compatibility is enabled for this run.",
-    "When you need a tool, do not describe the intended action in natural language before or instead of the tool request.",
-    "Emit a parseable tool request immediately using one of these formats only:",
-    '- `to=<tool> {"arg":"value"}`',
-    '- `{"tool":"<tool>","args":{...}}`',
-    "Do not emit bracket summaries like `[Tool call: ...]`.",
-    "Do not emit `NO_REPLY` when a tool call is required.",
-    ...(isFreshExternalChannelSession
-      ? [
-          "Do not output a bootstrap greeting or onboarding preamble as the main reply on a fresh external messaging session.",
-          "Answer the user's actual first-turn request directly, and if a tool is needed, emit the tool request immediately.",
-        ]
-      : []),
-    "If no tool is needed, answer normally.",
+    "This is a fresh real user turn on an external messaging channel.",
+    "Treat BOOTSTRAP.md as background context only, not as a script for what to say first.",
+    "Do not output a bootstrap greeting, startup line, onboarding questionnaire, or identity-setup prompt as your main reply.",
+    'Do not say things like "Hey. I just came online", "Who am I, and who are you?", or ask the user to choose your name, creature, vibe, or emoji unless they explicitly asked for that.',
+    "Reply directly to the user's actual message in a normal assistant voice.",
   ].join("\n");
 }
 
@@ -1212,79 +1234,8 @@ export async function runEmbeddedAttempt(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
     const ownerDisplay = resolveOwnerDisplaySetting(params.config);
-    const compatExtraSystemPrompt = buildFoxcodeCompatExtraSystemPrompt({
-      provider: params.provider,
-      modelApi: params.model.api,
-      messageChannel: runtimeChannel,
-      messages: activeSession.messages,
-      compat: params.model.compat,
-    });
-    const mergedExtraSystemPrompt = joinPresentTextSegments(
-      [compatExtraSystemPrompt, params.extraSystemPrompt],
-      { trim: true },
-    );
-
-    const appendPrompt = buildEmbeddedSystemPrompt({
-      workspaceDir: effectiveWorkspace,
-      defaultThinkLevel: params.thinkLevel,
-      reasoningLevel: params.reasoningLevel ?? "off",
-      extraSystemPrompt: mergedExtraSystemPrompt,
-      ownerNumbers: params.ownerNumbers,
-      ownerDisplay: ownerDisplay.ownerDisplay,
-      ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,
-      reasoningTagHint,
-      heartbeatPrompt: isDefaultAgent
-        ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
-        : undefined,
-      skillsPrompt,
-      docsPath: docsPath ?? undefined,
-      ttsHint,
-      workspaceNotes,
-      reactionGuidance,
-      promptMode,
-      acpEnabled: params.config?.acp?.enabled !== false,
-      runtimeInfo,
-      messageToolHints,
-      sandboxInfo,
-      tools,
-      modelAliasLines: buildModelAliasLines(params.config),
-      userTimezone,
-      userTime,
-      userTimeFormat,
-      contextFiles,
-      bootstrapTruncationWarningLines: bootstrapPromptWarning.lines,
-      memoryCitationsMode: params.config?.memory?.citations,
-    });
-    const systemPromptReport = buildSystemPromptReport({
-      source: "run",
-      generatedAt: Date.now(),
-      sessionId: params.sessionId,
-      sessionKey: params.sessionKey,
-      provider: params.provider,
-      model: params.modelId,
-      workspaceDir: effectiveWorkspace,
-      bootstrapMaxChars,
-      bootstrapTotalMaxChars,
-      bootstrapTruncation: buildBootstrapTruncationReportMeta({
-        analysis: bootstrapAnalysis,
-        warningMode: bootstrapPromptWarningMode,
-        warning: bootstrapPromptWarning,
-      }),
-      sandbox: (() => {
-        const runtime = resolveSandboxRuntimeStatus({
-          cfg: params.config,
-          sessionKey: sandboxSessionKey,
-        });
-        return { mode: runtime.mode, sandboxed: runtime.sandboxed };
-      })(),
-      systemPrompt: appendPrompt,
-      bootstrapFiles: hookAdjustedBootstrapFiles,
-      injectedFiles: contextFiles,
-      skillsPrompt,
-      tools,
-    });
-    const systemPromptOverride = createSystemPromptOverride(appendPrompt);
-    let systemPromptText = systemPromptOverride();
+    let systemPromptReport: ReturnType<typeof buildSystemPromptReport> | undefined;
+    let systemPromptText = "";
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
@@ -1321,6 +1272,89 @@ export async function runEmbeddedAttempt(
         allowedToolNames,
       });
       trackSessionManagerAccess(params.sessionFile);
+
+      const existingSessionMessages = sessionManager.buildSessionContext().messages;
+      const compatExtraSystemPrompt = buildFoxcodeCompatExtraSystemPrompt({
+        provider: params.provider,
+        modelApi: params.model.api,
+        messageChannel: runtimeChannel,
+        messages: existingSessionMessages,
+        compat: params.model.compat,
+      });
+      const foxcodeBootstrapContainmentPrompt = buildFoxcodeCompatBootstrapContainmentPrompt({
+        provider: params.provider,
+        modelApi: params.model.api,
+        messageChannel: runtimeChannel,
+        messages: existingSessionMessages,
+        compat: params.model.compat,
+      });
+      const mergedExtraSystemPrompt = joinPresentTextSegments(
+        [compatExtraSystemPrompt, params.extraSystemPrompt],
+        { trim: true },
+      );
+
+      const appendPrompt = buildEmbeddedSystemPrompt({
+        workspaceDir: effectiveWorkspace,
+        defaultThinkLevel: params.thinkLevel,
+        reasoningLevel: params.reasoningLevel ?? "off",
+        extraSystemPrompt: mergedExtraSystemPrompt,
+        postProjectContextSystemPrompt: foxcodeBootstrapContainmentPrompt,
+        ownerNumbers: params.ownerNumbers,
+        ownerDisplay: ownerDisplay.ownerDisplay,
+        ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,
+        reasoningTagHint,
+        heartbeatPrompt: isDefaultAgent
+          ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
+          : undefined,
+        skillsPrompt,
+        docsPath: docsPath ?? undefined,
+        ttsHint,
+        workspaceNotes,
+        reactionGuidance,
+        promptMode,
+        acpEnabled: params.config?.acp?.enabled !== false,
+        runtimeInfo,
+        messageToolHints,
+        sandboxInfo,
+        tools,
+        modelAliasLines: buildModelAliasLines(params.config),
+        userTimezone,
+        userTime,
+        userTimeFormat,
+        contextFiles,
+        bootstrapTruncationWarningLines: bootstrapPromptWarning.lines,
+        memoryCitationsMode: params.config?.memory?.citations,
+      });
+      systemPromptReport = buildSystemPromptReport({
+        source: "run",
+        generatedAt: Date.now(),
+        sessionId: params.sessionId,
+        sessionKey: params.sessionKey,
+        provider: params.provider,
+        model: params.modelId,
+        workspaceDir: effectiveWorkspace,
+        bootstrapMaxChars,
+        bootstrapTotalMaxChars,
+        bootstrapTruncation: buildBootstrapTruncationReportMeta({
+          analysis: bootstrapAnalysis,
+          warningMode: bootstrapPromptWarningMode,
+          warning: bootstrapPromptWarning,
+        }),
+        sandbox: (() => {
+          const runtime = resolveSandboxRuntimeStatus({
+            cfg: params.config,
+            sessionKey: sandboxSessionKey,
+          });
+          return { mode: runtime.mode, sandboxed: runtime.sandboxed };
+        })(),
+        systemPrompt: appendPrompt,
+        bootstrapFiles: hookAdjustedBootstrapFiles,
+        injectedFiles: contextFiles,
+        skillsPrompt,
+        tools,
+      });
+      const systemPromptOverride = createSystemPromptOverride(appendPrompt);
+      systemPromptText = systemPromptOverride();
 
       if (hadSessionFile && params.contextEngine?.bootstrap) {
         try {

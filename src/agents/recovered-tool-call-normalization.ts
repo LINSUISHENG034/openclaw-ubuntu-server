@@ -28,7 +28,7 @@ function canonicalizeToolArguments(
       return args;
     }
     const aliasKey = hasFilePath ? "filePath" : "file_path";
-    const nextArgs = { ...args, path: args[aliasKey] };
+    const nextArgs: Record<string, unknown> = { ...args, path: args[aliasKey] };
     delete nextArgs[aliasKey];
     return nextArgs;
   }
@@ -37,7 +37,7 @@ function canonicalizeToolArguments(
     if (Object.hasOwn(args, "command") || !Object.hasOwn(args, "cmd")) {
       return args;
     }
-    const nextArgs = { ...args, command: args.cmd };
+    const nextArgs: Record<string, unknown> = { ...args, command: args.cmd };
     delete nextArgs.cmd;
     return nextArgs;
   }
