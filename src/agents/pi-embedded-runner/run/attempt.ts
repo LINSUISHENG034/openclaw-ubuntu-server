@@ -1780,9 +1780,9 @@ export async function runEmbeddedAttempt(
       // Compat providers (Foxcode) interleave commentary text with tool calls
       // during streaming. Deferring block replies to message_end allows the
       // isToolUseAssistant check to suppress interim commentary before delivery.
+      const modelCompat = params.model.compat as ModelCompatConfig | undefined;
       const effectiveBlockReplyBreak =
-        params.model.compat?.textToolCalls?.enabled === true &&
-        params.blockReplyBreak === "text_end"
+        modelCompat?.textToolCalls?.enabled === true && params.blockReplyBreak === "text_end"
           ? "message_end"
           : params.blockReplyBreak;
 
