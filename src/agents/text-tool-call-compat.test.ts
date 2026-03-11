@@ -106,6 +106,38 @@ describe("parseTextToolCalls", () => {
     ]);
   });
 
+  it("maps bracket read pseudo-calls to path", () => {
+    const result = parseTextToolCalls({
+      text: "[Tool call: read `/tmp/test.txt`]",
+      compat,
+      allowedToolNames: new Set(["read"]),
+    });
+
+    expect(result.toolCalls).toEqual([
+      {
+        id: "compat_text_call_1",
+        name: "read",
+        arguments: { path: "/tmp/test.txt" },
+      },
+    ]);
+  });
+
+  it("maps bracket exec pseudo-calls to command", () => {
+    const result = parseTextToolCalls({
+      text: "[Tool call: exec `pwd`]",
+      compat,
+      allowedToolNames: new Set(["exec"]),
+    });
+
+    expect(result.toolCalls).toEqual([
+      {
+        id: "compat_text_call_1",
+        name: "exec",
+        arguments: { command: "pwd" },
+      },
+    ]);
+  });
+
   it("preserves surrounding text when mixed text is allowed", () => {
     const result = parseTextToolCalls({
       text: 'Running now.\n\nto=exec commentary code\n{"command":"pwd"}\n\nDone.',

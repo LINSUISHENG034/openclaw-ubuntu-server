@@ -669,6 +669,61 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
       ],
     });
   });
+
+  it("renumbers recovered tool call ids across multiple text blocks in one assistant message", async () => {
+    const finalMessage = {
+      role: "assistant",
+      stopReason: "stop",
+      content: [
+        {
+          type: "text",
+          text: 'to=read commentary code\n{"path":"/tmp/a"}',
+        },
+        {
+          type: "text",
+          text: 'to=read commentary code\n{"path":"/tmp/b"}',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() =>
+      createFakeStream({
+        events: [],
+        resultMessage: finalMessage,
+      }),
+    );
+
+    const stream = await invokeWrappedStream({
+      baseFn,
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+      allowedToolNames: new Set(["read"]),
+    });
+
+    const result = await stream.result();
+
+    expect(result).toEqual({
+      role: "assistant",
+      stopReason: "toolUse",
+      content: [
+        {
+          type: "toolCall",
+          id: "compat_text_call_1",
+          name: "read",
+          arguments: { path: "/tmp/a" },
+        },
+        {
+          type: "toolCall",
+          id: "compat_text_call_2",
+          name: "read",
+          arguments: { path: "/tmp/b" },
+        },
+      ],
+    });
+  });
 });
 
 describe("isOllamaCompatProvider", () => {
