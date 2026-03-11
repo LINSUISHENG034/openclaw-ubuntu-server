@@ -119,10 +119,10 @@ function extractPseudoToolCall(value: Record<string, unknown>): {
 function buildBracketPseudoToolArgs(name: string, payload: string): Record<string, unknown> | null {
   const trimmedName = name.trim();
   if (trimmedName === "read") {
-    return { filePath: payload };
+    return { path: payload };
   }
   if (trimmedName === "exec") {
-    return { cmd: payload };
+    return { command: payload };
   }
   return null;
 }

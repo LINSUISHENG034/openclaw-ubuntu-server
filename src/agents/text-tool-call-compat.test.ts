@@ -100,7 +100,7 @@ describe("parseTextToolCalls", () => {
         id: "compat_text_call_1",
         name: "read",
         arguments: {
-          filePath: "/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md",
+          path: "/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md",
         },
       },
     ]);
