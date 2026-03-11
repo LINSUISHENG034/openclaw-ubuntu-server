@@ -1777,6 +1777,15 @@ export async function runEmbeddedAttempt(
         });
       };
 
+      // Compat providers (Foxcode) interleave commentary text with tool calls
+      // during streaming. Deferring block replies to message_end allows the
+      // isToolUseAssistant check to suppress interim commentary before delivery.
+      const effectiveBlockReplyBreak =
+        params.model.compat?.textToolCalls?.enabled === true &&
+        params.blockReplyBreak === "text_end"
+          ? "message_end"
+          : params.blockReplyBreak;
+
       const subscription = subscribeEmbeddedPiSession({
         session: activeSession,
         runId: params.runId,
@@ -1791,7 +1800,7 @@ export async function runEmbeddedAttempt(
         onReasoningEnd: params.onReasoningEnd,
         onBlockReply: params.onBlockReply,
         onBlockReplyFlush: params.onBlockReplyFlush,
-        blockReplyBreak: params.blockReplyBreak,
+        blockReplyBreak: effectiveBlockReplyBreak,
         blockReplyChunking: params.blockReplyChunking,
         onPartialReply: params.onPartialReply,
         onAssistantMessageStart: params.onAssistantMessageStart,

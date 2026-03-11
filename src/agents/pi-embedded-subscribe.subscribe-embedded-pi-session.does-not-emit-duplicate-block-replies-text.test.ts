@@ -2,6 +2,7 @@ import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import {
   createStubSessionHarness,
+  createSubscribedSessionHarness,
   createTextEndBlockReplyHarness,
   emitAssistantTextDelta,
   emitAssistantTextEnd,
@@ -206,6 +207,88 @@ describe("subscribeEmbeddedPiSession", () => {
     emit({ type: "message_end", message: assistantMessage });
 
     expect(subscription.assistantTexts).toEqual(["Hello world"]);
+  });
+  it("does not emit commentary block replies from a toolUse assistant message (message_end mode)", async () => {
+    const onBlockReply = vi.fn();
+    const { emit, subscription } = createSubscribedSessionHarness({
+      runId: "run",
+      onBlockReply,
+      blockReplyBreak: "message_end",
+    });
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emitAssistantTextDelta({ emit, delta: "我先检查本机蓝牙和音频状态。" });
+    emitAssistantTextEnd({ emit });
+    emitAssistantTextDelta({ emit, delta: "进展还行：设备和音频后端已在查。" });
+    emitAssistantTextEnd({ emit });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [
+          { type: "text", text: "我先检查本机蓝牙和音频状态。" },
+          {
+            type: "toolCall",
+            id: "call_1",
+            name: "exec",
+            arguments: { command: "bluetoothctl show" },
+          },
+          { type: "text", text: "进展还行：设备和音频后端已在查。" },
+        ],
+      } as AssistantMessage,
+    });
+    await Promise.resolve();
+
+    expect(onBlockReply).not.toHaveBeenCalled();
+    expect(subscription.assistantTexts).toEqual([]);
+  });
+  it("delivers the final stop reply after suppressing toolUse interim text (message_end mode)", async () => {
+    const onBlockReply = vi.fn();
+    const { emit, subscription } = createSubscribedSessionHarness({
+      runId: "run",
+      onBlockReply,
+      blockReplyBreak: "message_end",
+    });
+
+    // First message: toolUse with commentary — should be suppressed
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emitAssistantTextDelta({ emit, delta: "让我检查一下。" });
+    emitAssistantTextEnd({ emit });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "toolUse",
+        content: [
+          { type: "text", text: "让我检查一下。" },
+          { type: "toolCall", id: "call_1", name: "exec", arguments: { command: "ls" } },
+        ],
+      } as AssistantMessage,
+    });
+    await Promise.resolve();
+    expect(onBlockReply).not.toHaveBeenCalled();
+
+    // Second message: final stop reply — should be delivered
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emitAssistantTextDelta({ emit, delta: "检查完毕，一切正常。" });
+    emitAssistantTextEnd({ emit });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "stop",
+        content: [{ type: "text", text: "检查完毕，一切正常。" }],
+      } as AssistantMessage,
+    });
+    await Promise.resolve();
+
+    expect(onBlockReply).toHaveBeenCalledTimes(1);
+    expect(onBlockReply).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "检查完毕，一切正常。" }),
+    );
+    expect(subscription.assistantTexts).toEqual(["检查完毕，一切正常。"]);
   });
   it("populates assistantTexts for non-streaming models with chunking enabled", () => {
     // Non-streaming models (e.g. zai/glm-4.7): no text_delta events; message_end
