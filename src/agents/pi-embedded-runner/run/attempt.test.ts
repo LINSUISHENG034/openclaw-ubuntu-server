@@ -480,6 +480,8 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
 
   async function invokeWrappedStream(params: {
     baseFn: (...args: never[]) => unknown;
+    provider?: string;
+    modelApi?: string;
     compat?: {
       textToolCalls?: {
         enabled?: boolean;
@@ -493,6 +495,8 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
   }) {
     const wrappedFn = wrapStreamFnApplyTextToolCallCompat(
       params.baseFn as never,
+      params.provider,
+      params.modelApi,
       params.compat as never,
       params.allowedToolNames,
     );
@@ -694,6 +698,8 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
 
     const stream = await invokeWrappedStream({
       baseFn,
+      provider: "foxcode-codex",
+      modelApi: "openai-responses",
       compat: {
         textToolCalls: {
           enabled: true,

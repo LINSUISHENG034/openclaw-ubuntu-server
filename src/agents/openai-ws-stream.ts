@@ -42,6 +42,7 @@ import {
   type ResponseObject,
 } from "./openai-ws-connection.js";
 import { log } from "./pi-embedded-runner/logger.js";
+import { normalizeRecoveredToolCallsInAssistantMessage } from "./recovered-tool-call-normalization.js";
 import {
   buildAssistantMessage,
   buildAssistantMessageWithZeroUsage,
@@ -329,7 +330,7 @@ export function buildAssistantMessageFromResponse(
   const hasToolCalls = content.some((c) => c.type === "toolCall");
   const stopReason: StopReason = hasToolCalls ? "toolUse" : "stop";
 
-  return buildAssistantMessage({
+  const message = buildAssistantMessage({
     model: modelInfo,
     content,
     stopReason,
@@ -339,6 +340,15 @@ export function buildAssistantMessageFromResponse(
       totalTokens: response.usage?.total_tokens ?? 0,
     }),
   });
+
+  normalizeRecoveredToolCallsInAssistantMessage({
+    message,
+    provider: modelInfo.provider,
+    modelApi: modelInfo.api,
+    compat: modelInfo.compat,
+  });
+
+  return message;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

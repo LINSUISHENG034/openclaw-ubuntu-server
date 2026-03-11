@@ -69,6 +69,7 @@ import { createPreparedEmbeddedPiSettingsManager } from "../../pi-project-settin
 import { applyPiAutoCompactionGuard } from "../../pi-settings.js";
 import { toClientToolDefinitions } from "../../pi-tool-definition-adapter.js";
 import { createOpenClawCodingTools, resolveToolLoopDetectionConfig } from "../../pi-tools.js";
+import { normalizeRecoveredToolCallsInAssistantMessage } from "../../recovered-tool-call-normalization.js";
 import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSandboxRuntimeStatus } from "../../sandbox/runtime-status.js";
 import { isXaiProvider } from "../../schema/clean-for-xai.js";
@@ -541,6 +542,8 @@ function wrapStreamFnDecodeXaiToolCallArguments(baseFn: StreamFn): StreamFn {
 
 function applyTextToolCallCompatToAssistantMessage(params: {
   message: unknown;
+  provider?: string;
+  modelApi?: string;
   compat?: ModelCompatConfig;
   allowedToolNames?: Set<string>;
 }): void {
@@ -592,6 +595,12 @@ function applyTextToolCallCompatToAssistantMessage(params: {
   }
 
   (params.message as { content: unknown[] }).content = nextContent;
+  normalizeRecoveredToolCallsInAssistantMessage({
+    message: params.message,
+    provider: params.provider,
+    modelApi: params.modelApi,
+    compat: params.compat,
+  });
   const hasToolCalls = nextContent.some((block) => {
     return (
       !!block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall"
@@ -604,13 +613,21 @@ function applyTextToolCallCompatToAssistantMessage(params: {
 
 function wrapStreamApplyTextToolCallCompat(
   stream: ReturnType<typeof streamSimple>,
+  provider: string | undefined,
+  modelApi: string | undefined,
   compat?: ModelCompatConfig,
   allowedToolNames?: Set<string>,
 ): ReturnType<typeof streamSimple> {
   const originalResult = stream.result.bind(stream);
   stream.result = async () => {
     const message = await originalResult();
-    applyTextToolCallCompatToAssistantMessage({ message, compat, allowedToolNames });
+    applyTextToolCallCompatToAssistantMessage({
+      message,
+      provider,
+      modelApi,
+      compat,
+      allowedToolNames,
+    });
     return message;
   };
 
@@ -630,6 +647,8 @@ function wrapStreamApplyTextToolCallCompat(
             if (event.type === "done") {
               applyTextToolCallCompatToAssistantMessage({
                 message: event.message,
+                provider,
+                modelApi,
                 compat,
                 allowedToolNames,
               });
@@ -643,6 +662,8 @@ function wrapStreamApplyTextToolCallCompat(
             } else if (event.type === "error") {
               applyTextToolCallCompatToAssistantMessage({
                 message: event.error,
+                provider,
+                modelApi,
                 compat,
                 allowedToolNames,
               });
@@ -664,6 +685,8 @@ function wrapStreamApplyTextToolCallCompat(
 
 export function wrapStreamFnApplyTextToolCallCompat(
   baseFn: StreamFn,
+  provider?: string,
+  modelApi?: string,
   compat?: ModelCompatConfig,
   allowedToolNames?: Set<string>,
 ): StreamFn {
@@ -671,10 +694,16 @@ export function wrapStreamFnApplyTextToolCallCompat(
     const maybeStream = baseFn(model, context, options);
     if (maybeStream && typeof maybeStream === "object" && "then" in maybeStream) {
       return Promise.resolve(maybeStream).then((stream) =>
-        wrapStreamApplyTextToolCallCompat(stream, compat, allowedToolNames),
+        wrapStreamApplyTextToolCallCompat(stream, provider, modelApi, compat, allowedToolNames),
       );
     }
-    return wrapStreamApplyTextToolCallCompat(maybeStream, compat, allowedToolNames);
+    return wrapStreamApplyTextToolCallCompat(
+      maybeStream,
+      provider,
+      modelApi,
+      compat,
+      allowedToolNames,
+    );
   };
 }
 
@@ -1543,6 +1572,8 @@ export async function runEmbeddedAttempt(
       if (params.model.api === "openai-responses") {
         activeSession.agent.streamFn = wrapStreamFnApplyTextToolCallCompat(
           activeSession.agent.streamFn,
+          params.provider,
+          params.model.api,
           params.model.compat,
           allowedToolNames,
         );

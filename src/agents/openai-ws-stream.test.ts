@@ -646,6 +646,54 @@ describe("buildAssistantMessageFromResponse", () => {
     expect(msg.stopReason).toBe("toolUse");
   });
 
+  it("renumbers recovered compat ids across multiple output_text parts", () => {
+    const response: ResponseObject = {
+      ...makeResponseObject("resp_compat_dupe_ids"),
+      output: [
+        {
+          type: "message",
+          id: "item_1",
+          role: "assistant",
+          content: [
+            { type: "output_text", text: 'to=read commentary code\n{"path":"/tmp/a"}' },
+            { type: "output_text", text: 'to=read commentary code\n{"path":"/tmp/b"}' },
+          ],
+        },
+      ],
+    };
+    const msg = buildAssistantMessageFromResponse(
+      response,
+      {
+        api: "openai-responses",
+        provider: "foxcode-codex",
+        id: "gpt-5.2",
+        compat: {
+          textToolCalls: {
+            enabled: true,
+            formats: ["codex_commentary_v1"],
+          },
+        },
+      },
+      { allowedToolNames: new Set(["read"]) },
+    );
+
+    expect(msg.content).toEqual([
+      {
+        type: "toolCall",
+        id: "compat_text_call_1",
+        name: "read",
+        arguments: { path: "/tmp/a" },
+      },
+      {
+        type: "toolCall",
+        id: "compat_text_call_2",
+        name: "read",
+        arguments: { path: "/tmp/b" },
+      },
+    ]);
+    expect(msg.stopReason).toBe("toolUse");
+  });
+
   it("keeps native function_call handling unchanged when compat is enabled", () => {
     const response = makeResponseObject("resp_native_tool", undefined, "exec");
     const msg = buildAssistantMessageFromResponse(response, {
