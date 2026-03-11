@@ -27,7 +27,10 @@ import { resolveTelegramInlineButtonsScope } from "../../../telegram/inline-butt
 import { resolveTelegramReactionLevel } from "../../../telegram/reaction-level.js";
 import { buildTtsSystemPromptHint } from "../../../tts/tts.js";
 import { resolveUserPath } from "../../../utils.js";
-import { normalizeMessageChannel } from "../../../utils/message-channel.js";
+import {
+  isInternalMessageChannel,
+  normalizeMessageChannel,
+} from "../../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../../agent-paths.js";
 import { resolveSessionAgentIds } from "../../agent-scope.js";
@@ -782,6 +785,8 @@ export function composeSystemPromptWithHookContext(params: {
 export function buildFoxcodeCompatExtraSystemPrompt(params: {
   provider?: string;
   modelApi?: string;
+  messageChannel?: string;
+  messages?: unknown[];
   compat?: ModelCompatConfig;
 }): string | undefined {
   if (
@@ -792,6 +797,18 @@ export function buildFoxcodeCompatExtraSystemPrompt(params: {
     return undefined;
   }
 
+  const normalizedChannel = normalizeMessageChannel(params.messageChannel);
+  const isFreshExternalChannelSession =
+    !!normalizedChannel &&
+    !isInternalMessageChannel(normalizedChannel) &&
+    !params.messages?.some((message) => {
+      return (
+        !!message &&
+        typeof message === "object" &&
+        (message as { role?: unknown }).role === "assistant"
+      );
+    });
+
   return [
     "Foxcode tool-call compatibility is enabled for this run.",
     "When you need a tool, do not describe the intended action in natural language before or instead of the tool request.",
@@ -800,6 +817,12 @@ export function buildFoxcodeCompatExtraSystemPrompt(params: {
     '- `{"tool":"<tool>","args":{...}}`',
     "Do not emit bracket summaries like `[Tool call: ...]`.",
     "Do not emit `NO_REPLY` when a tool call is required.",
+    ...(isFreshExternalChannelSession
+      ? [
+          "Do not output a bootstrap greeting or onboarding preamble as the main reply on a fresh external messaging session.",
+          "Answer the user's actual first-turn request directly, and if a tool is needed, emit the tool request immediately.",
+        ]
+      : []),
     "If no tool is needed, answer normally.",
   ].join("\n");
 }
@@ -1192,6 +1215,8 @@ export async function runEmbeddedAttempt(
     const compatExtraSystemPrompt = buildFoxcodeCompatExtraSystemPrompt({
       provider: params.provider,
       modelApi: params.model.api,
+      messageChannel: runtimeChannel,
+      messages: activeSession.messages,
       compat: params.model.compat,
     });
     const mergedExtraSystemPrompt = joinPresentTextSegments(

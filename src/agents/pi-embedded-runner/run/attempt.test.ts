@@ -160,6 +160,57 @@ describe("buildFoxcodeCompatExtraSystemPrompt", () => {
 
     expect(prompt).toBeUndefined();
   });
+
+  it("adds bootstrap containment for fresh external-channel foxcode sessions", () => {
+    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: "foxcode-codex",
+      modelApi: "openai-responses",
+      messageChannel: "telegram",
+      messages: [{ role: "user", content: "hi" }],
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(prompt).toContain("Do not output a bootstrap greeting");
+  });
+
+  it("does not add bootstrap containment for fresh local or web sessions", () => {
+    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: "foxcode-codex",
+      modelApi: "openai-responses",
+      messageChannel: "webchat",
+      messages: [{ role: "user", content: "hi" }],
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(prompt).not.toContain("Do not output a bootstrap greeting");
+  });
+
+  it("does not add bootstrap containment for non-foxcode providers", () => {
+    const prompt = buildFoxcodeCompatExtraSystemPrompt({
+      provider: "openai",
+      modelApi: "openai-responses",
+      messageChannel: "telegram",
+      messages: [{ role: "user", content: "hi" }],
+      compat: {
+        textToolCalls: {
+          enabled: true,
+          formats: ["codex_commentary_v1"],
+        },
+      },
+    });
+
+    expect(prompt).toBeUndefined();
+  });
 });
 
 describe("resolvePromptModeForSession", () => {
