@@ -785,6 +785,29 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
   });
 });
 
+describe("effectiveBlockReplyBreak override", () => {
+  it("overrides blockReplyBreak to message_end when compat textToolCalls is enabled", () => {
+    const computeEffectiveBreak = (
+      compat: { textToolCalls?: { enabled?: boolean } } | undefined,
+      requested: "text_end" | "message_end",
+    ) =>
+      compat?.textToolCalls?.enabled === true && requested === "text_end"
+        ? "message_end"
+        : requested;
+
+    expect(computeEffectiveBreak({ textToolCalls: { enabled: true } }, "text_end")).toBe(
+      "message_end",
+    );
+    expect(computeEffectiveBreak({ textToolCalls: { enabled: true } }, "message_end")).toBe(
+      "message_end",
+    );
+    expect(computeEffectiveBreak({ textToolCalls: { enabled: false } }, "text_end")).toBe(
+      "text_end",
+    );
+    expect(computeEffectiveBreak(undefined, "text_end")).toBe("text_end");
+  });
+});
+
 describe("isOllamaCompatProvider", () => {
   it("detects native ollama provider id", () => {
     expect(
