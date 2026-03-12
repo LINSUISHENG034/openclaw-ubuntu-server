@@ -768,6 +768,11 @@ export function createOpenAIWebSocketStreamFn(
 
       // ── 4. Build & send response.create ──────────────────────────────────
       const tools = convertTools(context.tools);
+      const allowedToolNames = new Set(
+        (context.tools ?? [])
+          .map((tool) => toNonEmptyString(tool.name))
+          .filter((name): name is string => Boolean(name)),
+      );
 
       // Forward generation options that the HTTP path (openai-responses provider) also uses.
       // Cast to record since SimpleStreamOptions carries openai-specific fields as unknown.
