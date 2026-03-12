@@ -10,6 +10,7 @@ import {
   decodeHtmlEntitiesInObject,
   isOllamaCompatProvider,
   prependSystemPromptAddition,
+  resolveEffectiveBlockReplyBreak,
   resolveAttemptFsWorkspaceOnly,
   resolveOllamaCompatNumCtxEnabled,
   resolvePromptModeForSession,
@@ -787,24 +788,27 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
 
 describe("effectiveBlockReplyBreak override", () => {
   it("overrides blockReplyBreak to message_end when compat textToolCalls is enabled", () => {
-    const computeEffectiveBreak = (
-      compat: { textToolCalls?: { enabled?: boolean } } | undefined,
-      requested: "text_end" | "message_end",
-    ) =>
-      compat?.textToolCalls?.enabled === true && requested === "text_end"
-        ? "message_end"
-        : requested;
-
-    expect(computeEffectiveBreak({ textToolCalls: { enabled: true } }, "text_end")).toBe(
-      "message_end",
-    );
-    expect(computeEffectiveBreak({ textToolCalls: { enabled: true } }, "message_end")).toBe(
-      "message_end",
-    );
-    expect(computeEffectiveBreak({ textToolCalls: { enabled: false } }, "text_end")).toBe(
+    expect(
+      resolveEffectiveBlockReplyBreak({
+        compat: { textToolCalls: { enabled: true } },
+        requested: "text_end",
+      }),
+    ).toBe("message_end");
+    expect(
+      resolveEffectiveBlockReplyBreak({
+        compat: { textToolCalls: { enabled: true } },
+        requested: "message_end",
+      }),
+    ).toBe("message_end");
+    expect(
+      resolveEffectiveBlockReplyBreak({
+        compat: { textToolCalls: { enabled: false } },
+        requested: "text_end",
+      }),
+    ).toBe("text_end");
+    expect(resolveEffectiveBlockReplyBreak({ compat: undefined, requested: "text_end" })).toBe(
       "text_end",
     );
-    expect(computeEffectiveBreak(undefined, "text_end")).toBe("text_end");
   });
 });
 

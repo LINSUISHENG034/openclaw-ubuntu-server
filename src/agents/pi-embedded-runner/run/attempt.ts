@@ -686,6 +686,15 @@ function wrapStreamApplyTextToolCallCompat(
   return stream;
 }
 
+export function resolveEffectiveBlockReplyBreak(params: {
+  compat?: ModelCompatConfig;
+  requested?: "text_end" | "message_end";
+}): "text_end" | "message_end" | undefined {
+  return params.compat?.textToolCalls?.enabled === true && params.requested === "text_end"
+    ? "message_end"
+    : params.requested;
+}
+
 export function wrapStreamFnApplyTextToolCallCompat(
   baseFn: StreamFn,
   provider?: string,
@@ -1781,10 +1790,10 @@ export async function runEmbeddedAttempt(
       // during streaming. Deferring block replies to message_end allows the
       // isToolUseAssistant check to suppress interim commentary before delivery.
       const modelCompat = params.model.compat as ModelCompatConfig | undefined;
-      const effectiveBlockReplyBreak =
-        modelCompat?.textToolCalls?.enabled === true && params.blockReplyBreak === "text_end"
-          ? "message_end"
-          : params.blockReplyBreak;
+      const effectiveBlockReplyBreak = resolveEffectiveBlockReplyBreak({
+        compat: modelCompat,
+        requested: params.blockReplyBreak,
+      });
 
       const subscription = subscribeEmbeddedPiSession({
         session: activeSession,

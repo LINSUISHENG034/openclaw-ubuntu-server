@@ -299,8 +299,13 @@ export async function handleToolExecutionStart(
   ctx: ToolHandlerContext,
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ) {
-  // Flush pending block replies to preserve message boundaries before tool execution.
-  ctx.flushBlockReplyBuffer();
+  // Only text_end mode should flush in-progress assistant text before tool start.
+  // In message_end mode, compat providers like Foxcode can stream commentary
+  // before a toolUse assistant message; flushing here leaks that commentary to
+  // external channels before message_end can classify it as intermediate.
+  if (ctx.state.blockReplyBreak === "text_end") {
+    ctx.flushBlockReplyBuffer();
+  }
   if (ctx.params.onBlockReplyFlush) {
     await ctx.params.onBlockReplyFlush();
   }

@@ -438,4 +438,69 @@ describe("subscribeEmbeddedPiSession", () => {
     expect(lifecycleError).toBeDefined();
     expect(lifecycleError?.data?.error).toContain("API rate limit reached");
   });
+
+  it("does not stream pseudo tool-call JSON objects via agent events", () => {
+    const { emit, onAgentEvent } = createAgentEventHarness();
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: '{"tool":"read","args":{"path":"/tmp/secret"}}',
+      },
+    });
+
+    const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
+    // The pseudo-tool JSON should be stripped — no agent event emitted with that text.
+    const leakedTexts = payloads.filter(
+      (p) => typeof p.text === "string" && p.text.includes('"tool"'),
+    );
+    expect(leakedTexts).toHaveLength(0);
+  });
+
+  it("streams visible prose but strips interleaved pseudo tool-call text from agent events", () => {
+    const { emit, onAgentEvent } = createAgentEventHarness();
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: [
+          "Running diagnostics.",
+          "",
+          '{"tool":"read","args":{"path":"/tmp/secret"}}',
+          "",
+          "Done.",
+        ].join("\n"),
+      },
+    });
+
+    const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    const lastPayload = payloads[payloads.length - 1];
+    expect(lastPayload?.text).toBe("Running diagnostics.\n\nDone.");
+  });
+
+  it("strips codex commentary tool-call text from streamed agent events", () => {
+    const { emit, onAgentEvent } = createAgentEventHarness();
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emit({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: 'to=exec commentary code\n{"command":"pwd","yieldMs":1000}\n\nDone.',
+      },
+    });
+
+    const payloads = extractAgentEventPayloads(onAgentEvent.mock.calls);
+    expect(payloads.length).toBeGreaterThanOrEqual(1);
+    const lastPayload = payloads[payloads.length - 1];
+    expect(lastPayload?.text).toBe("Done.");
+  });
 });

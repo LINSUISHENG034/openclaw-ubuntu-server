@@ -331,6 +331,67 @@ describe("dispatchTelegramMessage draft streaming", () => {
     );
   });
 
+  it("does not create Telegram partial previews for Foxcode compat sessions", async () => {
+    loadSessionStore.mockReturnValue({
+      s1: {
+        modelProvider: "foxcode-codex",
+        model: "gpt-5.4",
+      },
+    });
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(
+      async ({ dispatcherOptions, replyOptions }) => {
+        await replyOptions?.onPartialReply?.({ text: "我先检查蓝牙和音频状态。" });
+        await dispatcherOptions.deliver(
+          { text: "默认输出设备当前是 Dummy Output。" },
+          { kind: "final" },
+        );
+        return { queuedFinal: true };
+      },
+    );
+    deliverReplies.mockResolvedValue({ delivered: true });
+
+    await dispatchWithContext({
+      context: createContext({
+        ctxPayload: { SessionKey: "s1" } as unknown as TelegramMessageContext["ctxPayload"],
+      }),
+      streamMode: "partial",
+      cfg: {
+        models: {
+          providers: {
+            "foxcode-codex": {
+              api: "openai-responses",
+              models: [
+                {
+                  id: "gpt-5.4",
+                  compat: {
+                    textToolCalls: {
+                      enabled: true,
+                      formats: ["codex_commentary_v1"],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    expect(createTelegramDraftStream).not.toHaveBeenCalled();
+    expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyOptions: expect.objectContaining({
+          onPartialReply: undefined,
+        }),
+      }),
+    );
+    expect(deliverReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replies: [expect.objectContaining({ text: "默认输出设备当前是 Dummy Output。" })],
+      }),
+    );
+  });
+
   it("streams reasoning draft updates even when answer stream mode is off", async () => {
     loadSessionStore.mockReturnValue({
       s1: { reasoningLevel: "stream" },

@@ -5,6 +5,7 @@ import {
   loadModelCatalog,
   modelSupportsVision,
 } from "../agents/model-catalog.js";
+import { normalizeModelSelection } from "../agents/model-selection.js";
 import { resolveDefaultModelForAgent } from "../agents/model-selection.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import { clearHistoryEntriesIfEnabled } from "../auto-reply/reply/history.js";
@@ -111,27 +112,60 @@ type DispatchTelegramMessageParams = {
 
 type TelegramReasoningLevel = "off" | "on" | "stream";
 
+function resolveTelegramSessionEntry(params: {
+  cfg: OpenClawConfig;
+  sessionKey?: string;
+  agentId: string;
+}) {
+  const { cfg, sessionKey, agentId } = params;
+  if (!sessionKey) {
+    return undefined;
+  }
+  try {
+    const storePath = resolveStorePath(cfg.session?.store, { agentId });
+    const store = loadSessionStore(storePath, { skipCache: true });
+    return resolveSessionStoreEntry({ store, sessionKey }).existing;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveTelegramReasoningLevel(params: {
   cfg: OpenClawConfig;
   sessionKey?: string;
   agentId: string;
 }): TelegramReasoningLevel {
-  const { cfg, sessionKey, agentId } = params;
-  if (!sessionKey) {
-    return "off";
-  }
-  try {
-    const storePath = resolveStorePath(cfg.session?.store, { agentId });
-    const store = loadSessionStore(storePath, { skipCache: true });
-    const entry = resolveSessionStoreEntry({ store, sessionKey }).existing;
-    const level = entry?.reasoningLevel;
-    if (level === "on" || level === "stream") {
-      return level;
-    }
-  } catch {
-    // Fall through to default.
+  const entry = resolveTelegramSessionEntry(params);
+  const level = entry?.reasoningLevel;
+  if (level === "on" || level === "stream") {
+    return level;
   }
   return "off";
+}
+
+function shouldSuppressTelegramCompatAnswerPreview(params: {
+  cfg: OpenClawConfig;
+  sessionKey?: string;
+  agentId: string;
+}): boolean {
+  const entry = resolveTelegramSessionEntry(params);
+  if (!entry) {
+    return false;
+  }
+
+  const runtimeProvider = entry.modelProvider?.trim();
+  const runtimeModel = entry.model?.trim();
+  const normalizedOverride = normalizeModelSelection(entry.modelOverride);
+  const [overrideProvider, overrideModel] = normalizedOverride?.split("/", 2) ?? [];
+  const providerId = runtimeProvider || overrideProvider?.trim();
+  const modelId = runtimeModel || overrideModel?.trim();
+  if (!providerId || !modelId) {
+    return false;
+  }
+
+  const providerConfig = params.cfg.models?.providers?.[providerId];
+  const modelConfig = providerConfig?.models?.find((model) => model.id === modelId);
+  return modelConfig?.compat?.textToolCalls?.enabled === true;
 }
 
 export const dispatchTelegramMessage = async ({
@@ -185,9 +219,17 @@ export const dispatchTelegramMessage = async ({
   });
   const forceBlockStreamingForReasoning = resolvedReasoningLevel === "on";
   const streamReasoningDraft = resolvedReasoningLevel === "stream";
+  const suppressCompatAnswerPreview = shouldSuppressTelegramCompatAnswerPreview({
+    cfg,
+    sessionKey: ctxPayload.SessionKey,
+    agentId: route.agentId,
+  });
   const previewStreamingEnabled = streamMode !== "off";
   const canStreamAnswerDraft =
-    previewStreamingEnabled && !accountBlockStreamingEnabled && !forceBlockStreamingForReasoning;
+    previewStreamingEnabled &&
+    !accountBlockStreamingEnabled &&
+    !forceBlockStreamingForReasoning &&
+    !suppressCompatAnswerPreview;
   const canStreamReasoningDraft = canStreamAnswerDraft || streamReasoningDraft;
   const draftReplyToMessageId =
     replyToMode !== "off" && typeof msg.message_id === "number" ? msg.message_id : undefined;

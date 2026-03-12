@@ -37,6 +37,7 @@ function createTestContext(): {
       toolMetaById: new Map<string, ToolCallSummary>(),
       toolMetas: [],
       toolSummaryById: new Set<string>(),
+      blockReplyBreak: "text_end",
       pendingMessagingTargets: new Map<string, MessagingToolSend>(),
       pendingMessagingTexts: new Map<string, string>(),
       pendingMessagingMediaUrls: new Map<string, string[]>(),
@@ -119,6 +120,24 @@ describe("handleToolExecutionStart read path checks", () => {
     await pending;
 
     expect(ctx.state.toolMetaById.has("tool-await-flush")).toBe(true);
+  });
+
+  it("does not flush the current block buffer when block replies are deferred to message_end", async () => {
+    const { ctx, onBlockReplyFlush } = createTestContext();
+    ctx.state.blockReplyBreak = "message_end";
+
+    const evt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "exec",
+      toolCallId: "tool-message-end",
+      args: { command: "echo hi" },
+    };
+
+    await handleToolExecutionStart(ctx, evt);
+
+    expect(ctx.flushBlockReplyBuffer).not.toHaveBeenCalled();
+    expect(onBlockReplyFlush).toHaveBeenCalledTimes(1);
+    expect(ctx.state.toolMetaById.has("tool-message-end")).toBe(true);
   });
 });
 

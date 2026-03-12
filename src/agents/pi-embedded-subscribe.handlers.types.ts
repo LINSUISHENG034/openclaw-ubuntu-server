@@ -147,6 +147,7 @@ export type ToolHandlerState = Pick<
   | "toolMetaById"
   | "toolMetas"
   | "toolSummaryById"
+  | "blockReplyBreak"
   | "lastToolError"
   | "pendingMessagingTargets"
   | "pendingMessagingTexts"
