@@ -1,86 +1,15 @@
 # OpenClaw Foxcode Output Normalization and Bootstrap Containment
 
+> Note (2026-03-11): This draft has been superseded by:
+> `fork/plans/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md`
+
 ## Status
 
-Active final proposal.
-
-Implementation update on 2026-03-11:
-
-- shipped source-level bracket pseudo-call fixes:
-  - `read.filePath` no longer emitted from bracket recovery; bracket `read` now emits `path`
-  - `exec.cmd` no longer emitted from bracket recovery; bracket `exec` now emits `command`
-- shipped Foxcode-scoped recovered-call normalization at the assistant-message boundary:
-  - `read.filePath -> read.path`
-  - `read.file_path -> read.path`
-  - `exec.cmd -> exec.command`
-  - duplicate `compat_text_call_*` ids are renumbered per assistant message
-- shipped fresh-session bootstrap containment in Foxcode compat prompt assembly:
-  - activates only for `foxcode-codex` + `openai-responses` + `compat.textToolCalls.enabled === true`
-  - additionally requires a fresh session (no prior assistant message in context)
-  - additionally requires an external messaging channel (for example Telegram/Discord/Signal), not `webchat`
-
-Verification completed:
-
-- targeted regression suite passed:
-  - `src/agents/text-tool-call-compat.test.ts`
-  - `src/agents/recovered-tool-call-normalization.test.ts`
-  - `src/agents/pi-embedded-runner/run/attempt.test.ts`
-  - `src/agents/openai-ws-stream.test.ts`
-  - `src/shared/chat-content.text-tool-call-compat.test.ts`
-  - `src/agents/pi-embedded-utils.text-tool-call-compat.test.ts`
-- stable non-Foxcode spot check passed:
-  - `src/agents/openai-ws-stream.test.ts`
-
-Verification not completed:
-
-- manual live `lab` bot verification was not run from this shell, so Telegram `/start` behavior and live Foxcode tool execution still need an operator-side check
-
-Live verification update from this shell on 2026-03-11:
-
-- initial `lab` Telegram-context validation was run via fresh `agent:lab:telegram:direct:*` session keys through Gateway RPC
-- observed results on that first pass:
-  - `/start` still returned bootstrap-dominant replies (`Hey. I just came online...`)
-  - a concrete `read USER.md` task still produced an initial recovered `read` tool call with `filePath`, causing a real tool error (`Missing required parameter: path`) before a later retry used canonical `path`
-  - a casual first-turn `Hi there.` message still produced a bootstrap/identity reply
-- root-cause note for those first-pass live failures:
-  - the running gateway process was executing `/mnt/sda1/github/openclaw/dist/index.js`
-  - the source fixes in `src/` had not yet been rebuilt into `dist/`
-  - those initial live results therefore reflected stale runtime output, not yet a verified post-build runtime
-- next required verification step:
-  - rebuild `dist`, restart the gateway, and rerun the same fresh-session `lab` Telegram-context cases before making final live pass/fail claims
-
-Live verification follow-up after rebuilding `dist` and restarting the gateway:
-
-- fresh `/start` case passed:
-  - response no longer used the bootstrap greeting/identity questionnaire pattern
-  - observed reply shape: direct “I’m here, what do you want to do first?” style response
-- fresh concrete file/tool task passed:
-  - no `filePath -> path` schema failure was observed after rebuild
-  - the live reply correctly answered that `USER.md` does not specify a preferred name yet
-- fresh casual first-turn chat passed:
-  - no bootstrap onboarding reply
-  - observed reply shape: short natural greeting (`Hey — good to see you. What can I help with?`)
-
-Additional root-cause note from the second debugging round:
-
-- even after the rebuilt runtime picked up recovered-call normalization, fresh-session bootstrap containment still initially failed
-- the remaining root cause was prompt placement:
-  - the Foxcode bootstrap-suppression instruction was injected before `# Project Context`
-  - `BOOTSTRAP.md` content appeared later in the prompt and effectively overrode the earlier instruction in real model behavior
-- fix shipped:
-  - introduced a dedicated post-project-context bootstrap containment prompt
-  - placed that override after injected workspace files so it can supersede `BOOTSTRAP.md` for fresh external sessions without removing bootstrap context entirely
-
-Remaining known non-goals / unsolved cases in this patch:
-
-- no broader provider-general normalization layer was added
-- no additional alias tables were added beyond `read` and `exec`
-- ambiguous recovered argument payloads still fail closed rather than guessing
+Active follow-up proposal.
 
 This proposal inherits and narrows the design direction from:
 
-- `custom/proposals/2026-03-10-provider-normalization-design.md`
-- `custom/proposals/2026-03-11-foxcode-output-normalization-and-bootstrap-containment.md`
+- `fork/plans/2026-03-10-provider-normalization-design.md`
 
 It intentionally drops the broader "provider normalization subsystem" framing and focuses only on the Foxcode failure modes that were reproduced in a real Telegram `lab` session on 2026-03-11.
 
@@ -154,8 +83,6 @@ and those reads succeed.
 
 This confirms that protocol translation alone is insufficient. Foxcode output recovery must canonicalize arguments into the shapes OpenClaw tools actually accept.
 
-**Code-level note:** The current `buildBracketPseudoToolArgs` helper in `text-tool-call-compat.ts` itself hardcodes the incorrect aliases (`filePath` for `read`, `cmd` for `exec`). This means the bracket pseudo-tool recovery path is actively producing arguments that do not match OpenClaw tool contracts. This is a pre-existing bug that should be fixed at the source as part of this work, not just papered over by a downstream normalization layer.
-
 ### Observation 3: Synthetic tool-call ids are reused across multiple recovered calls
 
 The same recovered assistant message emits multiple `toolCall` blocks with the same synthetic id:
@@ -165,8 +92,6 @@ The same recovered assistant message emits multiple `toolCall` blocks with the s
 That id is then reused across multiple `toolResult` entries.
 
 Even when the runtime tolerates this, it is not a defensible canonical form. Synthetic ids generated during text-tool-call recovery must be unique across the full normalized assistant message, not just within a single text block transform.
-
-**Code-level note:** The existing `normalizeToolCallIdsInMessage` function in `attempt.ts` already provides a post-hoc fallback that assigns `call_auto_N` ids to empty or duplicate entries. This means duplicate ids are partially tolerated at runtime, but fixing id generation at the source (`text-tool-call-compat.ts`) is still the correct approach — relying on a downstream fallback for a known upstream bug is not a defensible design.
 
 ### Observation 4: Bootstrap still dominates the final answer
 
@@ -227,24 +152,17 @@ The current embedded HTTP path is the priority target. The WebSocket path can re
 
 Canonicalization should be explicit, tool-aware, and small.
 
-The fix has two layers:
-
-**Layer 1: Fix the source.** The current `buildBracketPseudoToolArgs` in `text-tool-call-compat.ts` hardcodes the wrong aliases (`filePath` for `read`, `cmd` for `exec`). Fix this function to emit correct field names (`path`, `command`) directly. This eliminates the most common alias drift at the source rather than manufacturing incorrect arguments and then correcting them downstream.
-
-**Layer 2: Add a downstream canonicalization pass.** Even after fixing `buildBracketPseudoToolArgs`, Foxcode free-form text output may still drift to non-canonical aliases via the `to=` and JSON pseudo-tool formats. Add a small alias table to normalize these before tool dispatch.
-
-Starting alias table (confirmed mismatches only):
+Start with the observed Foxcode mismatches:
 
 - `read`
   - `filePath -> path`
-  - `file_path -> path`
 - `exec`
   - `cmd -> command`
 
 Rules:
 
 - only transform known aliases for known tools
-- do not guess when multiple conflicting fields are present (e.g. if both `filePath` and `path` are present, do not transform — fail to validation)
+- do not guess when multiple conflicting fields are present
 - preserve validation errors when canonicalization still cannot produce a valid input
 
 This should be implemented as a dedicated helper, not buried inside regex parsing.
@@ -261,7 +179,7 @@ Synthetic ids should be assigned after the full assistant message has been flatt
 
 not multiple copies of `compat_text_call_1`.
 
-This is a source-correctness requirement. The existing `normalizeToolCallIdsInMessage` fallback in `attempt.ts` already prevents runtime breakage from duplicate ids by assigning `call_auto_N` fallback ids, but the correct fix is to generate unique ids at the source in `text-tool-call-compat.ts` so the fallback path is never triggered for this case. The fallback should remain as a safety net, not as the primary dedup mechanism.
+This is a correctness requirement, not an optional cleanup.
 
 ### 5. Keep provider prompt constraints, but make them explicitly Foxcode-specific
 
@@ -294,20 +212,6 @@ The behavior should be:
 This should be implemented as prompt orchestration, not parser logic.
 
 The first version should not attempt a generic "task classifier." A narrow Foxcode fresh-session containment rule is enough for the reproduced issue.
-
-**Recommended trigger condition (triple gate):**
-
-Bootstrap containment activates only when **all three** of the following are true:
-
-1. **isFoxcodeCompat**: provider is `foxcode-codex` AND `compat.textToolCalls.enabled === true`
-2. **isFreshSession**: session history is empty (no prior assistant messages in context)
-3. **isExternalChannel**: `messageChannel` resolves to an external messaging surface (telegram, signal, discord, slack, whatsapp, etc.) — not `local`, `web`, or subagent/cron sessions
-
-The existing `resolvePromptModeForSession` (`"minimal"` for subagent/cron, `"full"` otherwise) and `normalizeMessageChannel` helpers can be reused to determine condition 3. The fresh-session check can be derived from the session message count passed into the prompt assembly stage.
-
-When containment is active, `buildFoxcodeCompatExtraSystemPrompt` should append an additional instruction:
-
-> "This is your first turn on an external messaging channel. The user has sent you a real message. Respond to their message directly. Do not output a bootstrap greeting or persona initialization message as your primary reply."
 
 ## Alternatives Considered
 
@@ -352,28 +256,23 @@ Recommendation: choose C.
 
 ## Implementation Outline
 
-### Phase 1: Fix source-level alias and id bugs
+### Phase 1: Foxcode output canonicalization
 
-- fix `buildBracketPseudoToolArgs` in `text-tool-call-compat.ts` to emit correct field names (`path` instead of `filePath`, `command` instead of `cmd`)
-- fix synthetic id generation so ids stay unique after compat is applied across all text blocks in one assistant message (the current pipeline applies `applyTextToolCallCompatToTextBlock` per text block, so `compat_text_call_1` can be reintroduced for each block even when individual parser passes are locally consistent)
-- update existing test expectations in `text-tool-call-compat.test.ts`
 - keep current `textToolCalls` compat gating
+- route recovered Foxcode assistant content through one shared normalization helper
+- assign unique synthetic ids across the full assistant message
 
-### Phase 2: Downstream argument canonicalization
+### Phase 2: Tool argument canonicalization
 
-- add a small alias table for remaining Foxcode free-form mismatches (covering `to=` and JSON pseudo-tool formats)
-- route recovered Foxcode assistant content through the normalization helper after `applyTextToolCallCompatToAssistantMessage`
-- add ambiguity guard: if both canonical and alias fields are present, skip normalization and let validation fail naturally
-- add regression tests covering: `filePath -> path`, `cmd -> command`, ambiguous input (both fields present), and non-Foxcode passthrough
+- add a small alias table for known Foxcode mismatches
+- normalize arguments before tool dispatch
+- add regression tests for both `filePath -> path` and `cmd -> command`
 
 ### Phase 3: Fresh-session bootstrap containment
 
-- extend `buildFoxcodeCompatExtraSystemPrompt` to accept session context (message count, channel)
-- add the triple-gate containment condition: isFoxcodeCompat AND isFreshSession AND isExternalChannel
-- when active, append bootstrap-suppression instruction to the Foxcode compat prompt
-- do not remove `BOOTSTRAP.md` from context — only demote its conversational priority via prompt instruction
-- verify that `/start` on Telegram no longer produces the generic bootstrap greeting
-- add negative test: local/web bootstrap flow still works normally with bootstrap emphasis intact
+- add a Foxcode-only fresh-session guard in prompt assembly
+- demote `BOOTSTRAP.md` from primary conversational driver to background context for external-channel turns
+- verify that `/start` no longer produces the generic bootstrap greeting as the dominant final answer
 
 ## Testing Strategy
 
@@ -436,16 +335,17 @@ Deliverable:
 
 The current session shows repeated `compat_text_call_1`, but implementation should not rely on "this looks wrong."
 
-**Existing mitigation (confirmed):** `normalizeToolCallIdsInMessage` in `attempt.ts` (L302-354) already runs as a post-processing step on assistant messages. It assigns `call_auto_N` fallback ids to any duplicate or empty ids. This means runtime breakage from duplicate ids is unlikely in practice — the fix at the source is primarily a correctness invariant improvement.
+Before code changes, verify how repeated synthetic ids affect:
 
-Before code changes, still verify how repeated synthetic ids affect:
-
-- tool-result pairing (likely tolerated due to the existing fallback)
+- tool-result pairing
 - transcript repair
 - history replay / sanitization
 - any guards that assume unique tool-call ids
 
-The implementation should fix id generation at the source so the fallback is not relied upon, but priority is **lower** than alias canonicalization and bootstrap containment.
+If downstream already partially tolerates duplicate ids, the proposal should still require uniqueness, but the implementation should know whether it is fixing:
+
+- a correctness invariant only, or
+- a real downstream behavioral hazard
 
 Deliverable:
 
@@ -458,23 +358,16 @@ The current evidence covers a fresh Telegram `/start` turn. That is enough to ju
 
 Before implementation, validate three scenarios:
 
-1. fresh Telegram `/start` or equivalent onboarding-like turn → containment should activate
-2. fresh Telegram concrete task request → containment should activate
-3. normal onboarding / local bootstrap flow where bootstrap behavior is still desirable → containment must NOT activate
+1. fresh Telegram `/start` or equivalent onboarding-like turn
+2. fresh Telegram concrete task request
+3. normal onboarding / local bootstrap flow where bootstrap behavior is still desirable
 
 The implementation should only suppress bootstrap dominance in the first two when Foxcode is acting on an already real external channel turn, not in the third case.
 
-**Recommended validation approach:**
-
-- Use `resolvePromptModeForSession` to distinguish subagent/cron sessions (which return `"minimal"`) from normal sessions. The containment rule should only apply to `"full"` mode sessions.
-- Use `normalizeMessageChannel` to resolve the channel. External channels (telegram, signal, discord, slack, etc.) trigger containment; `local`, `web`, and undefined channels do not.
-- Check session message count: if the context passed to prompt assembly contains zero prior assistant messages, the session is fresh.
-
 Deliverable:
 
-- explicit trigger rule in the implementation plan (use the triple-gate condition defined in Design section 6)
+- explicit trigger rule in the implementation plan
 - at least one negative test proving intended onboarding still works
-- at least one negative test proving local/web sessions are unaffected
 
 ### 4. Validate non-Foxcode non-regression paths
 
@@ -594,7 +487,7 @@ Do not continue with the original broad provider-normalization proposal as the a
 
 Instead:
 
-- treat `custom/proposals/2026-03-10-provider-normalization-design.md` as background context
+- treat `fork/plans/2026-03-10-provider-normalization-design.md` as background context
 - implement a narrower Foxcode-specific follow-up
 - solve the three reproduced issues first:
   - argument canonicalization

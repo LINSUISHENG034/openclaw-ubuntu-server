@@ -3,7 +3,7 @@
 > Note (2026-03-11): This document is now background context rather than the active implementation target.
 >
 > Active follow-up:
-> `custom/proposals/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md`
+> `fork/plans/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md`
 >
 > That newer proposal inherits the useful parts of this design, but deliberately narrows scope to the Foxcode-specific failures reproduced in the `lab` Telegram session. In particular, it keeps the emphasis on bounded text-tool-call recovery, argument canonicalization, and bootstrap containment, while dropping the broader claim that OpenClaw should immediately build a provider-general normalization subsystem.
 

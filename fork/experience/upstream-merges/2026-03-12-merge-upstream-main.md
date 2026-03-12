@@ -80,7 +80,7 @@ Practical lesson:
 
 ## The Easy-To-Miss Post-Merge Failure
 
-The merge itself completed, but `custom/scripts/update-local-openclaw.sh` still failed during `pnpm build`.
+The merge itself completed, but the local update script at `./fork/scripts/update-local-openclaw.sh` still failed during `pnpm build`.
 
 Root cause:
 
@@ -120,7 +120,7 @@ The safest sequence after a large upstream merge was:
 1. merge upstream
 2. resolve conflicts
 3. run the Foxcode leak regression gate
-4. run `custom/scripts/update-local-openclaw.sh`
+4. run `./fork/scripts/update-local-openclaw.sh`
 5. verify the gateway restarted against the rebuilt `dist`
 
 This caught both:

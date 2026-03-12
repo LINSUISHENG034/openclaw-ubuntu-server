@@ -92,7 +92,7 @@ USER.md
 
 # Agent credentials and memory (NEVER COMMIT)
 /memory/
-/custom/api/
+/fork/api/
 .agent/*.json
 !.agent/workflows/
 /local/

@@ -317,7 +317,7 @@ scripts/committer "Agents: contain Foxcode bootstrap on fresh channel sessions" 
 
 **Files:**
 
-- Modify: `custom/proposals/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md`
+- Modify: `fork/plans/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md`
 - Optional: `docs/help/testing.md` if a durable regression workflow note is worth adding
 
 **Step 1: Run targeted regression suite**
@@ -369,5 +369,5 @@ Add a short implementation note to the final proposal recording:
 **Step 5: Commit**
 
 ```bash
-scripts/committer "Docs: record Foxcode normalization rollout notes" custom/proposals/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md
+scripts/committer "Docs: record Foxcode normalization rollout notes" fork/plans/2026-03-11-foxcode-output-normalization-and-bootstrap-containment_v2.md
 ```

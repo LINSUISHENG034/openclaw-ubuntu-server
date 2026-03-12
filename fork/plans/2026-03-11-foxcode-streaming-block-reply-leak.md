@@ -290,7 +290,7 @@ Expected: PASS with no TypeScript errors or `[INEFFECTIVE_DYNAMIC_IMPORT]` warni
 Run:
 
 ```bash
-./custom/scripts/update-local-openclaw.sh
+./fork/scripts/update-local-openclaw.sh
 ```
 
 Then send a test message to the `lab` agent via Telegram that triggers tool calls (e.g. a bluetooth/audio check). Verify:
