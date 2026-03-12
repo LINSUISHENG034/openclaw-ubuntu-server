@@ -85,7 +85,7 @@ describe("parseTextToolCalls", () => {
       text: [
         "先检查主机控制方式。",
         "",
-        "[Tool call: read `/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md`]",
+        "[Tool call: read `/home/lin/.openclaw/skills/deployment-host-diagnostics/SKILL.md`]",
       ].join("\n"),
       compat: {
         ...compat,
@@ -100,7 +100,7 @@ describe("parseTextToolCalls", () => {
         id: "compat_text_call_1",
         name: "read",
         arguments: {
-          path: "/mnt/sda1/github/openclaw/skills/deployment-host-diagnostics/SKILL.md",
+          path: "/home/lin/.openclaw/skills/deployment-host-diagnostics/SKILL.md",
         },
       },
     ]);
