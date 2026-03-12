@@ -5,6 +5,11 @@ REPO_ROOT="/mnt/sda1/github/openclaw"
 EXPECTED_UPSTREAM_URL="https://github.com/openclaw/openclaw"
 SERVICE_NAME="openclaw-gateway.service"
 GATEWAY_PORT="18789"
+FOXCODE_LEAK_TESTS=(
+  "src/telegram/bot-message-dispatch.test.ts"
+  "src/agents/pi-embedded-runner/run/attempt.test.ts"
+  "src/agents/pi-embedded-subscribe.subscribe-embedded-pi-session.replays-foxcode-compat-tooluse-boundary.test.ts"
+)
 
 cd "$REPO_ROOT"
 
@@ -36,6 +41,28 @@ echo
 
 echo "== Install dependencies =="
 pnpm install
+echo
+
+# These targeted tests protect the Foxcode Telegram leak fix from upstream drift.
+#
+# Why this lives in the local update script:
+# - Foxcode compat can leak process text on two different outward paths:
+#   1. embedded block-reply flushing before message_end classification
+#   2. Telegram partial-preview lanes showing compat commentary before the final answer refreshes
+# - both bugs are easy to reintroduce during upstream refactors because the final
+#   persisted session can still look clean while the user briefly sees leaked text
+# - the running gateway serves dist/, so we want to fail before rebuild/restart if
+#   upstream changes break the compat guardrails we rely on locally
+#
+# What each test file covers:
+# - attempt.test.ts:
+#   compat textToolCalls must still force blockReplyBreak to message_end
+# - replays-foxcode-compat-tooluse-boundary.test.ts:
+#   tool_execution_start must not flush compat commentary before toolUse message_end
+# - bot-message-dispatch.test.ts:
+#   Telegram must not create answer partial previews for Foxcode compat sessions
+echo "== Foxcode leak regression checks =="
+pnpm vitest run "${FOXCODE_LEAK_TESTS[@]}"
 echo
 
 echo "== Build =="
