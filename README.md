@@ -23,7 +23,19 @@ It answers you on the channels you already use (WhatsApp, Telegram, Slack, Disco
 
 If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
 
-This repository is a downstream fork of [`openclaw/openclaw`](https://github.com/openclaw/openclaw). It tracks upstream updates continuously while carrying Ubuntu Server deployment notes, fork-only operational fixes, and references to external operator skills managed in [`LINSUISHENG034/agent-skills`](https://github.com/LINSUISHENG034/agent-skills.git).
+## Downstream Fork Notice
+
+This repository is a downstream fork of [`openclaw/openclaw`](https://github.com/openclaw/openclaw).
+
+It tracks upstream updates continuously while carrying fork-specific improvements for Ubuntu Server and self-hosted deployment workflows, including operator-facing fixes, maintenance scripts, and references to externally managed skills from [`LINSUISHENG034/agent-skills`](https://github.com/LINSUISHENG034/agent-skills.git).
+
+Repository boundaries:
+
+- upstream product code and official docs stay aligned with `openclaw/openclaw`
+- fork-specific notes, plans, scripts, and investigations live under [`fork/`](./fork)
+- Ubuntu Server operator skills are managed outside this repository and installed at `~/.openclaw/skills/`
+
+When a fix is general enough to benefit upstream, it should be isolated and contributed back whenever possible.
 
 [Website](https://openclaw.ai) · [Docs](https://docs.openclaw.ai) · [Vision](VISION.md) · [DeepWiki](https://deepwiki.com/openclaw/openclaw) · [Getting Started](https://docs.openclaw.ai/start/getting-started) · [Updating](https://docs.openclaw.ai/install/updating) · [Showcase](https://docs.openclaw.ai/start/showcase) · [FAQ](https://docs.openclaw.ai/help/faq) · [Wizard](https://docs.openclaw.ai/start/wizard) · [Nix](https://github.com/openclaw/nix-openclaw) · [Docker](https://docs.openclaw.ai/install/docker) · [Discord](https://discord.gg/clawd)
 
