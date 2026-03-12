@@ -2010,6 +2010,7 @@ export async function runEmbeddedAttempt(
         try {
           await params.contextEngine.bootstrap({
             sessionId: params.sessionId,
+            sessionKey: params.sessionKey,
             sessionFile: params.sessionFile,
           });
         } catch (bootstrapErr) {
@@ -2371,6 +2372,7 @@ export async function runEmbeddedAttempt(
           try {
             const assembled = await params.contextEngine.assemble({
               sessionId: params.sessionId,
+              sessionKey: params.sessionKey,
               messages: activeSession.messages,
               tokenBudget: params.contextTokenBudget,
             });
@@ -2895,6 +2897,7 @@ export async function runEmbeddedAttempt(
             try {
               await params.contextEngine.afterTurn({
                 sessionId: sessionIdUsed,
+                sessionKey: params.sessionKey,
                 sessionFile: params.sessionFile,
                 messages: messagesSnapshot,
                 prePromptMessageCount,
@@ -2912,6 +2915,7 @@ export async function runEmbeddedAttempt(
                 try {
                   await params.contextEngine.ingestBatch({
                     sessionId: sessionIdUsed,
+                    sessionKey: params.sessionKey,
                     messages: newMessages,
                   });
                 } catch (ingestErr) {
@@ -2922,6 +2926,7 @@ export async function runEmbeddedAttempt(
                   try {
                     await params.contextEngine.ingest({
                       sessionId: sessionIdUsed,
+                      sessionKey: params.sessionKey,
                       message: msg,
                     });
                   } catch (ingestErr) {
