@@ -113,6 +113,23 @@ export function renderAgents(props: AgentsProps) {
   const selectedAgent = selectedId
     ? (agents.find((agent) => agent.id === selectedId) ?? null)
     : null;
+  const selectedSkillCount =
+    selectedId && props.agentSkills.agentId === selectedId
+      ? (props.agentSkills.report?.skills?.length ?? null)
+      : null;
+
+  const channelEntryCount = props.channels.snapshot
+    ? Object.keys(props.channels.snapshot.channelAccounts ?? {}).length
+    : null;
+  const cronJobCount = selectedId
+    ? props.cron.jobs.filter((j) => j.agentId === selectedId).length
+    : null;
+  const tabCounts: Record<string, number | null> = {
+    files: props.agentFiles.list?.files?.length ?? null,
+    skills: selectedSkillCount,
+    channels: channelEntryCount,
+    cron: cronJobCount || null,
+  };
 
   const channelEntryCount = props.channels.snapshot
     ? Object.keys(props.channels.snapshot.channelAccounts ?? {}).length
