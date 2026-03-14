@@ -29,7 +29,10 @@ export {
   shouldVerifyRequesterSpawnedSessionVisibility,
 } from "./sessions-resolution.js";
 import { type OpenClawConfig, loadConfig } from "../../config/config.js";
-import { extractTextFromChatContent } from "../../shared/chat-content.js";
+import {
+  extractTextFromChatContent,
+  resolveChatTextBlockPhase,
+} from "../../shared/chat-content.js";
 import { sanitizeUserFacingText } from "../pi-embedded-helpers.js";
 import {
   stripDowngradedToolCallText,

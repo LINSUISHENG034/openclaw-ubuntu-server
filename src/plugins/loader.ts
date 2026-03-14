@@ -58,10 +58,6 @@ export function clearPluginLoaderCache(): void {
   openAllowlistWarningCache.clear();
 }
 
-export function clearPluginLoaderCache(): void {
-  registryCache.clear();
-}
-
 const defaultLogger = () => createSubsystemLogger("plugins");
 
 type PluginSdkAliasCandidateKind = "dist" | "src";
