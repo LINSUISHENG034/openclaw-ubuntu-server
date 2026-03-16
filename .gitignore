@@ -20,6 +20,7 @@ ui/playwright-report/
 ui/test-results/
 packages/dashboard-next/.next/
 packages/dashboard-next/out/
+fork/investigations/prompt_hub.md
 
 # Mise configuration files
 mise.toml
