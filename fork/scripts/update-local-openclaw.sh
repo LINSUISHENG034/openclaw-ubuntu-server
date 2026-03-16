@@ -6,7 +6,7 @@ EXPECTED_UPSTREAM_URL="https://github.com/openclaw/openclaw"
 SERVICE_NAME="openclaw-gateway.service"
 GATEWAY_PORT="18789"
 FOXCODE_LEAK_TESTS=(
-  "src/telegram/bot-message-dispatch.test.ts"
+  "extensions/telegram/src/bot-message-dispatch.test.ts"
   "src/agents/pi-embedded-runner/run/attempt.test.ts"
   "src/agents/pi-embedded-subscribe.subscribe-embedded-pi-session.replays-foxcode-compat-tooluse-boundary.test.ts"
 )
