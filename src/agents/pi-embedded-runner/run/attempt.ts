@@ -1912,6 +1912,9 @@ export async function runEmbeddedAttempt(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
     const ownerDisplay = resolveOwnerDisplaySetting(params.config);
+    const heartbeatPrompt = isDefaultAgent
+      ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
+      : undefined;
     let systemPromptReport: ReturnType<typeof buildSystemPromptReport> | undefined;
     let systemPromptText = "";
 
@@ -1984,9 +1987,7 @@ export async function runEmbeddedAttempt(
         ownerDisplay: ownerDisplay.ownerDisplay,
         ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,
         reasoningTagHint,
-        heartbeatPrompt: isDefaultAgent
-          ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
-          : undefined,
+        heartbeatPrompt,
         skillsPrompt,
         docsPath: docsPath ?? undefined,
         ttsHint,
@@ -2003,7 +2004,6 @@ export async function runEmbeddedAttempt(
         userTime,
         userTimeFormat,
         contextFiles,
-        bootstrapTruncationWarningLines: bootstrapPromptWarning.lines,
         memoryCitationsMode: params.config?.memory?.citations,
       });
       systemPromptReport = buildSystemPromptReport({

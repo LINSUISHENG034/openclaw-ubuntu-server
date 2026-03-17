@@ -21,6 +21,13 @@ vi.mock("./draft-stream.js", () => ({
 vi.mock("../../../src/auto-reply/reply/provider-dispatcher.js", () => ({
   dispatchReplyWithBufferedBlockDispatcher,
 }));
+vi.mock("openclaw/plugin-sdk/reply-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/reply-runtime")>();
+  return {
+    ...actual,
+    dispatchReplyWithBufferedBlockDispatcher,
+  };
+});
 
 vi.mock("./bot/delivery.js", () => ({
   deliverReplies,
@@ -32,6 +39,14 @@ vi.mock("./send.js", () => ({
 
 vi.mock("../../../src/config/sessions.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/config/sessions.js")>();
+  return {
+    ...actual,
+    loadSessionStore,
+    resolveStorePath,
+  };
+});
+vi.mock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/config-runtime")>();
   return {
     ...actual,
     loadSessionStore,

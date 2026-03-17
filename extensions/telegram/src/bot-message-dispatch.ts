@@ -5,8 +5,8 @@ import {
   loadModelCatalog,
   modelSupportsVision,
   normalizeModelSelection,
-  resolveDefaultModelForAgent,
 } from "openclaw/plugin-sdk/agent-runtime";
+import { resolveDefaultModelForAgent } from "openclaw/plugin-sdk/agent-runtime";
 import { removeAckReactionAfterReply } from "openclaw/plugin-sdk/channel-runtime";
 import { logAckFailure, logTypingFailure } from "openclaw/plugin-sdk/channel-runtime";
 import { createReplyPrefixOptions } from "openclaw/plugin-sdk/channel-runtime";
