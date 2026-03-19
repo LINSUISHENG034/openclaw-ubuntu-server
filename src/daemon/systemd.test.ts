@@ -114,6 +114,7 @@ const assertRestartSuccess = async (env: NodeJS.ProcessEnv) => {
 describe("systemd availability", () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    vi.restoreAllMocks();
   });
 
   it("returns true when systemctl --user succeeds", async () => {
@@ -160,6 +161,24 @@ describe("systemd availability", () => {
       });
 
     await expect(isSystemdUserServiceAvailable({ USER: "debian" })).resolves.toBe(true);
+  });
+
+  it("hydrates user bus env when XDG_RUNTIME_DIR is missing", async () => {
+    vi.spyOn(process, "getuid").mockReturnValue(1000);
+    execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+      expect(args).toEqual(["--user", "status"]);
+      expect(opts.env?.XDG_RUNTIME_DIR).toBe("/run/user/1000");
+      expect(opts.env?.DBUS_SESSION_BUS_ADDRESS).toBe("unix:path=/run/user/1000/bus");
+      cb(null, "", "");
+    });
+
+    await expect(
+      isSystemdUserServiceAvailable({
+        USER: "debian",
+        XDG_RUNTIME_DIR: "",
+        DBUS_SESSION_BUS_ADDRESS: "",
+      }),
+    ).resolves.toBe(true);
   });
 });
 

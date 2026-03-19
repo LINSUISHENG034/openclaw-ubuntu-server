@@ -252,10 +252,33 @@ export function parseSystemdShow(output: string): SystemdServiceInfo {
   return info;
 }
 
+function resolveSystemctlExecEnv(
+  env: GatewayServiceEnv = process.env as GatewayServiceEnv,
+): NodeJS.ProcessEnv {
+  const mergedEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
+  const runtimeDir =
+    mergedEnv.XDG_RUNTIME_DIR?.trim() ||
+    (() => {
+      if (typeof process.getuid !== "function") {
+        return "";
+      }
+      return `/run/user/${process.getuid()}`;
+    })();
+
+  if (runtimeDir && !mergedEnv.XDG_RUNTIME_DIR?.trim()) {
+    mergedEnv.XDG_RUNTIME_DIR = runtimeDir;
+  }
+  if (runtimeDir && !mergedEnv.DBUS_SESSION_BUS_ADDRESS?.trim()) {
+    mergedEnv.DBUS_SESSION_BUS_ADDRESS = `unix:path=${runtimeDir}/bus`;
+  }
+  return mergedEnv;
+}
+
 async function execSystemctl(
   args: string[],
+  env: GatewayServiceEnv = process.env as GatewayServiceEnv,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
-  return await execFileUtf8("systemctl", args);
+  return await execFileUtf8("systemctl", args, { env: resolveSystemctlExecEnv(env) });
 }
 
 function readSystemctlDetail(result: { stdout: string; stderr: string }): string {
@@ -396,11 +419,14 @@ async function execSystemctlUser(
   if (sudoUser && sudoUser !== "root" && machineUser) {
     const machineScopeArgs = resolveSystemctlMachineUserScopeArgs(machineUser);
     if (machineScopeArgs.length > 0) {
-      return await execSystemctl([...machineScopeArgs, ...args]);
+      return await execSystemctl([...machineScopeArgs, ...args], env);
     }
   }
 
-  const directResult = await execSystemctl([...resolveSystemctlDirectUserScopeArgs(), ...args]);
+  const directResult = await execSystemctl(
+    [...resolveSystemctlDirectUserScopeArgs(), ...args],
+    env,
+  );
   if (directResult.code === 0) {
     return directResult;
   }
@@ -414,7 +440,7 @@ async function execSystemctlUser(
   if (machineScopeArgs.length === 0) {
     return directResult;
   }
-  return await execSystemctl([...machineScopeArgs, ...args]);
+  return await execSystemctl([...machineScopeArgs, ...args], env);
 }
 
 export async function isSystemdUserServiceAvailable(
