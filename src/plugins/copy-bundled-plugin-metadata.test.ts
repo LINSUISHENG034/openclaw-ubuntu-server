@@ -8,6 +8,10 @@ import {
 } from "../../scripts/copy-bundled-plugin-metadata.mjs";
 
 const tempDirs: string[] = [];
+const optionalBundlesEnv = {
+  ...process.env,
+  OPENCLAW_INCLUDE_OPTIONAL_BUNDLED: "1",
+};
 
 function makeRepoRoot(prefix: string): string {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -55,7 +59,7 @@ describe("copyBundledPluginMetadata", () => {
       openclaw: { extensions: ["./index.ts"] },
     });
 
-    copyBundledPluginMetadata({ repoRoot });
+    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
 
     expect(
       fs.existsSync(path.join(repoRoot, "dist", "extensions", "acpx", "openclaw.plugin.json")),
@@ -126,7 +130,7 @@ describe("copyBundledPluginMetadata", () => {
     fs.mkdirSync(staleNodeModulesSkillDir, { recursive: true });
     fs.writeFileSync(path.join(staleNodeModulesSkillDir, "stale.txt"), "stale\n", "utf8");
 
-    copyBundledPluginMetadata({ repoRoot });
+    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
 
     const copiedSkillDir = path.join(
       repoRoot,
@@ -169,7 +173,7 @@ describe("copyBundledPluginMetadata", () => {
       openclaw: { extensions: ["./index.ts"] },
     });
 
-    copyBundledPluginMetadata({ repoRoot });
+    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
 
     expect(
       fs.readFileSync(
@@ -222,7 +226,7 @@ describe("copyBundledPluginMetadata", () => {
     const staleNodeModulesDir = path.join(repoRoot, "dist", "extensions", "tlon", "node_modules");
     fs.mkdirSync(staleNodeModulesDir, { recursive: true });
 
-    copyBundledPluginMetadata({ repoRoot });
+    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
 
     const bundledManifest = JSON.parse(
       fs.readFileSync(
@@ -264,7 +268,7 @@ describe("copyBundledPluginMetadata", () => {
     });
 
     try {
-      copyBundledPluginMetadata({ repoRoot });
+      copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
     } finally {
       cpSyncSpy.mockRestore();
     }
@@ -337,5 +341,23 @@ describe("copyBundledPluginMetadata", () => {
     copyBundledPluginMetadata({ repoRoot });
 
     expect(fs.existsSync(staleDistDir)).toBe(false);
+  });
+
+  it("skips optional bundled plugin metadata when the optional cluster is not built", () => {
+    const repoRoot = makeRepoRoot("openclaw-bundled-plugin-optional-skip-");
+    const pluginDir = path.join(repoRoot, "extensions", "acpx");
+    fs.mkdirSync(pluginDir, { recursive: true });
+    writeJson(path.join(pluginDir, "openclaw.plugin.json"), {
+      id: "acpx",
+      configSchema: { type: "object" },
+    });
+    writeJson(path.join(pluginDir, "package.json"), {
+      name: "@openclaw/acpx",
+      openclaw: { extensions: ["./index.ts"] },
+    });
+
+    copyBundledPluginMetadata({ repoRoot });
+
+    expect(fs.existsSync(path.join(repoRoot, "dist", "extensions", "acpx"))).toBe(false);
   });
 });

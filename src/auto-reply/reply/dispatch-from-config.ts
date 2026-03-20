@@ -1,4 +1,9 @@
+import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import {
+  resolveConversationBindingRecord,
+  touchConversationBindingRecord,
+} from "../../bindings/records.js";
 import { shouldSuppressLocalExecApprovalPrompt } from "../../channels/plugins/exec-approval-local.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
@@ -20,7 +25,6 @@ import {
   toPluginMessageReceivedEvent,
 } from "../../hooks/message-hook-mappers.js";
 import { isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
-import { getSessionBindingService } from "../../infra/outbound/session-binding-service.js";
 import {
   logMessageProcessed,
   logMessageQueued,
@@ -317,7 +321,7 @@ export async function dispatchReplyFromConfig(params: {
 
   const pluginOwnedBindingRecord =
     inboundClaimContext.conversationId && inboundClaimContext.channelId
-      ? getSessionBindingService().resolveByConversation({
+      ? resolveConversationBindingRecord({
           channel: inboundClaimContext.channelId,
           accountId: inboundClaimContext.accountId ?? "default",
           conversationId: inboundClaimContext.conversationId,
@@ -334,7 +338,7 @@ export async function dispatchReplyFromConfig(params: {
     | undefined;
 
   if (pluginOwnedBinding) {
-    getSessionBindingService().touch(pluginOwnedBinding.bindingId);
+    touchConversationBindingRecord(pluginOwnedBinding.bindingId);
     logVerbose(
       `plugin-bound inbound routed to ${pluginOwnedBinding.pluginId} conversation=${pluginOwnedBinding.conversationId}`,
     );
@@ -543,7 +547,7 @@ export async function dispatchReplyFromConfig(params: {
       }
       // Group/native flows intentionally suppress tool summary text, but media-only
       // tool results (for example TTS audio) must still be delivered.
-      const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
+      const hasMedia = resolveSendableOutboundReplyParts(payload).hasMedia;
       if (!hasMedia) {
         return null;
       }

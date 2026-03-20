@@ -1,3 +1,4 @@
+import type { OpenAICompletionsCompat } from "@mariozechner/pi-ai";
 import type { SecretInput } from "./types.secrets.js";
 
 export const MODEL_APIS = [
@@ -17,24 +18,36 @@ export type TextToolCallFormat = "codex_commentary_v1";
 
 export type TextToolCallCompatConfig = {
   enabled?: boolean;
-  formats?: TextToolCallFormat[];
+  formats?: readonly TextToolCallFormat[];
   requireKnownToolName?: boolean;
   allowMixedText?: boolean;
   maxCallsPerMessage?: number;
 };
 
-export type ModelCompatConfig = {
-  supportsStore?: boolean;
-  supportsDeveloperRole?: boolean;
-  supportsReasoningEffort?: boolean;
-  supportsUsageInStreaming?: boolean;
+type SupportedOpenAICompatFields = Pick<
+  OpenAICompletionsCompat,
+  | "supportsStore"
+  | "supportsDeveloperRole"
+  | "supportsReasoningEffort"
+  | "supportsUsageInStreaming"
+  | "supportsStrictMode"
+  | "maxTokensField"
+  | "requiresToolResultName"
+  | "requiresAssistantAfterToolResult"
+  | "requiresThinkingAsText"
+>;
+
+type SupportedThinkingFormat =
+  | NonNullable<OpenAICompletionsCompat["thinkingFormat"]>
+  | "qwen"
+  | "qwen-chat-template";
+
+export type ModelCompatConfig = SupportedOpenAICompatFields & {
+  thinkingFormat?: SupportedThinkingFormat;
   supportsTools?: boolean;
-  supportsStrictMode?: boolean;
-  maxTokensField?: "max_completion_tokens" | "max_tokens";
-  thinkingFormat?: "openai" | "zai" | "qwen";
-  requiresToolResultName?: boolean;
-  requiresAssistantAfterToolResult?: boolean;
-  requiresThinkingAsText?: boolean;
+  toolSchemaProfile?: "xai";
+  nativeWebSearchTool?: boolean;
+  toolCallArgumentsEncoding?: "html-entities";
   requiresMistralToolIds?: boolean;
   requiresOpenAiAnthropicToolPayload?: boolean;
   textToolCalls?: TextToolCallCompatConfig;
