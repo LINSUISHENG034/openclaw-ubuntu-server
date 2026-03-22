@@ -49,13 +49,65 @@ function isLegacyToolExecuteArgs(args: ToolExecuteArgsAny): args is ToolExecuteA
   return isAbortSignal(fifth);
 }
 
+function describeNestedErrorCause(
+  value: unknown,
+  seen = new Set<unknown>(),
+  depth = 0,
+): string | undefined {
+  if (value === undefined || value === null || seen.has(value) || depth >= 3) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    return value.trim() || undefined;
+  }
+  if (typeof value !== "object") {
+    const text =
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint" ||
+      typeof value === "undefined"
+        ? String(value).trim()
+        : typeof value === "symbol"
+          ? value.description?.trim() || value.toString()
+          : typeof value === "function"
+            ? value.name.trim() || "function"
+            : undefined;
+    return text || undefined;
+  }
+
+  seen.add(value);
+  const record = value as {
+    name?: unknown;
+    message?: unknown;
+    code?: unknown;
+    cause?: unknown;
+  };
+  const code = typeof record.code === "string" ? record.code.trim() : undefined;
+  const message = typeof record.message === "string" ? record.message.trim() : undefined;
+  const name = typeof record.name === "string" ? record.name.trim() : undefined;
+  const summary =
+    message || code || (name && name !== "Error" && name !== "TypeError" ? name : undefined);
+  const nested = describeNestedErrorCause(record.cause, seen, depth + 1);
+  if (!summary) {
+    return nested;
+  }
+  if (!nested || nested === summary) {
+    return summary;
+  }
+  return `${summary} <- ${nested}`;
+}
+
 function describeToolExecutionError(err: unknown): {
   message: string;
   stack?: string;
 } {
   if (err instanceof Error) {
     const message = err.message?.trim() ? err.message : String(err);
-    return { message, stack: err.stack };
+    const cause = describeNestedErrorCause(err.cause);
+    return {
+      message: cause && !message.includes(cause) ? `${message} (cause: ${cause})` : message,
+      stack: err.stack,
+    };
   }
   return { message: String(err) };
 }

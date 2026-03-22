@@ -56,6 +56,36 @@ describe("pi tool definition adapter", () => {
     });
   });
 
+  it("includes nested fetch causes in tool error results", async () => {
+    const tool = {
+      name: "web_search",
+      label: "Web Search",
+      description: "throws fetch failed with cause",
+      parameters: Type.Object({}),
+      execute: async () => {
+        throw Object.assign(new TypeError("fetch failed"), {
+          cause: Object.assign(new Error("getaddrinfo ENOTFOUND api.search.brave.com"), {
+            code: "ENOTFOUND",
+          }),
+        });
+      },
+    } satisfies AgentTool;
+
+    const result = await executeTool(tool, "call-fetch");
+
+    expect(result.details).toMatchObject({
+      status: "error",
+      tool: "web_search",
+      error: expect.stringContaining("fetch failed"),
+    });
+    expect(result.details).toMatchObject({
+      error: expect.stringContaining("ENOTFOUND"),
+    });
+    expect(result.details).toMatchObject({
+      error: expect.stringContaining("api.search.brave.com"),
+    });
+  });
+
   it("coerces details-only tool results to include content", async () => {
     const tool = {
       name: "memory_query",
