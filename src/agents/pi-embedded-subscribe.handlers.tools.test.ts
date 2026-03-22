@@ -41,6 +41,8 @@ function createTestContext(): {
       pendingMessagingTargets: new Map<string, MessagingToolSend>(),
       pendingMessagingTexts: new Map<string, string>(),
       pendingMessagingMediaUrls: new Map<string, string[]>(),
+      pendingToolMediaUrls: [],
+      pendingToolAudioAsVoice: false,
       messagingToolSentTexts: [],
       messagingToolSentTextsNormalized: [],
       messagingToolSentMediaUrls: [],
