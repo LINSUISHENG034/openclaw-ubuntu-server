@@ -404,6 +404,30 @@ describe("model compat config schema", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("accepts openrouter thinking format", () => {
+    const res = validateConfigObject({
+      models: {
+        providers: {
+          local: {
+            baseUrl: "http://127.0.0.1:1234/v1",
+            api: "openai-completions",
+            models: [
+              {
+                id: "openrouter-kimi",
+                name: "OpenRouter Kimi",
+                compat: {
+                  thinkingFormat: "openrouter",
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(res.ok).toBe(true);
+  });
+
   it("accepts text tool-call compat fields", () => {
     const res = validateConfigObject({
       models: {

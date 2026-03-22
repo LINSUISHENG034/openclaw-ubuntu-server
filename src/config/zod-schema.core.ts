@@ -184,7 +184,7 @@ export const ModelApiSchema = z.enum(MODEL_APIS);
 export const TextToolCallCompatSchema = z
   .object({
     enabled: z.boolean().optional(),
-    formats: z.array(z.literal("codex_commentary_v1")).optional(),
+    formats: z.array(z.literal("codex_commentary_v1")).readonly().optional(),
     requireKnownToolName: z.boolean().optional(),
     allowMixedText: z.boolean().optional(),
     maxCallsPerMessage: z.number().int().positive().optional(),
@@ -206,6 +206,7 @@ export const ModelCompatSchema = z
     thinkingFormat: z
       .union([
         z.literal("openai"),
+        z.literal("openrouter"),
         z.literal("zai"),
         z.literal("qwen"),
         z.literal("qwen-chat-template"),
