@@ -515,23 +515,6 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Bravo");
   });
 
-  it("places post-project-context prompt after injected project files", () => {
-    const prompt = buildAgentSystemPrompt({
-      workspaceDir: "/tmp/openclaw",
-      contextFiles: [{ path: "BOOTSTRAP.md", content: "Start with: Hey. I just came online." }],
-      postProjectContextSystemPrompt:
-        "Fresh external session override: do not output a bootstrap greeting.",
-    });
-
-    const bootstrapIndex = prompt.indexOf("Start with: Hey. I just came online.");
-    const overrideIndex = prompt.indexOf(
-      "Fresh external session override: do not output a bootstrap greeting.",
-    );
-
-    expect(bootstrapIndex).toBeGreaterThanOrEqual(0);
-    expect(overrideIndex).toBeGreaterThan(bootstrapIndex);
-  });
-
   it("ignores context files with missing or blank paths", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
