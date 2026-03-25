@@ -1280,6 +1280,34 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
                           requiresOpenAiAnthropicToolPayload: {
                             type: "boolean",
                           },
+                          textToolCalls: {
+                            type: "object",
+                            properties: {
+                              enabled: {
+                                type: "boolean",
+                              },
+                              formats: {
+                                readOnly: true,
+                                type: "array",
+                                items: {
+                                  type: "string",
+                                  const: "codex_commentary_v1",
+                                },
+                              },
+                              requireKnownToolName: {
+                                type: "boolean",
+                              },
+                              allowMixedText: {
+                                type: "boolean",
+                              },
+                              maxCallsPerMessage: {
+                                type: "integer",
+                                exclusiveMinimum: 0,
+                                maximum: 9007199254740991,
+                              },
+                            },
+                            additionalProperties: false,
+                          },
                         },
                         additionalProperties: false,
                       },
@@ -13883,6 +13911,36 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
       label: "Model Provider Model List",
       help: "Declared model list for a provider including identifiers, metadata, and optional compatibility/cost hints. Keep IDs exact to provider catalog values so selection and fallback resolve correctly.",
       tags: ["models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls": {
+      label: "Model Text Tool-Call Compatibility",
+      help: "Optional text tool-call compatibility layer for models that emit tool requests as plain text instead of native structured tool calls. Leave this off by default and enable it only for specific non-standard providers or model versions you have verified.",
+      tags: ["models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls.enabled": {
+      label: "Model Text Tool-Call Compatibility Enabled",
+      help: "Enables text tool-call normalization for this model when true. This only converts supported text protocols into internal tool calls and does not bypass existing tool permissions, approvals, or allowlists.",
+      tags: ["models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls.formats": {
+      label: "Model Text Tool-Call Compatibility Formats",
+      help: 'Ordered list of supported text tool-call formats to parse for this model, such as "codex_commentary_v1". Keep this list narrow so only known provider-specific text protocols are interpreted as tool calls.',
+      tags: ["models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls.requireKnownToolName": {
+      label: "Model Text Tool-Call Require Known Tool Name",
+      help: "When true, only tool names already available to the active run are accepted from text-form tool calls. Keep this enabled unless a specific provider needs looser compatibility behavior during controlled testing.",
+      tags: ["models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls.allowMixedText": {
+      label: "Model Text Tool-Call Allow Mixed Text",
+      help: "Allows visible assistant text to remain alongside extracted text-form tool calls in the same message. Enable this only for providers that mix natural-language status text with pseudo tool-call blocks in one assistant response.",
+      tags: ["access", "models"],
+    },
+    "models.providers.*.models[].compat.textToolCalls.maxCallsPerMessage": {
+      label: "Model Text Tool-Call Max Calls Per Message",
+      help: "Maximum number of text-form tool calls parsed from a single assistant message before later matches are ignored. Use a small cap to limit malformed-output fallout and keep compatibility handling predictable.",
+      tags: ["performance", "models"],
     },
     "models.bedrockDiscovery": {
       label: "Bedrock Model Discovery",

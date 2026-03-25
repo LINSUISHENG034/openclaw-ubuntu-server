@@ -497,10 +497,10 @@ describe("dispatchTelegramMessage draft streaming", () => {
     );
   });
 
-  it("does not create Telegram partial previews for Foxcode compat sessions", async () => {
+  it("does not create Telegram partial previews for compat text-tool-call sessions", async () => {
     loadSessionStore.mockReturnValue({
       s1: {
-        modelProvider: "foxcode-codex",
+        modelProvider: "compat-provider",
         model: "gpt-5.4",
       },
     });
@@ -524,7 +524,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
       cfg: {
         models: {
           providers: {
-            "foxcode-codex": {
+            "compat-provider": {
               api: "openai-responses",
               models: [
                 {

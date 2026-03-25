@@ -32,10 +32,7 @@ import { isCronSessionKey, isSubagentSessionKey } from "../../../routing/session
 import { joinPresentTextSegments } from "../../../shared/text/join-segments.js";
 import { buildTtsSystemPromptHint } from "../../../tts/tts.js";
 import { resolveUserPath } from "../../../utils.js";
-import {
-  isInternalMessageChannel,
-  normalizeMessageChannel,
-} from "../../../utils/message-channel.js";
+import { normalizeMessageChannel } from "../../../utils/message-channel.js";
 import { isReasoningTagProvider } from "../../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../../agent-paths.js";
 import { resolveSessionAgentIds } from "../../agent-scope.js";
@@ -1700,70 +1697,6 @@ export {
   resolveAttemptSpawnWorkspaceDir,
 } from "./attempt.thread-helpers.js";
 
-export function buildFoxcodeCompatExtraSystemPrompt(params: {
-  provider?: string;
-  modelApi?: string;
-  messageChannel?: string;
-  messages?: unknown[];
-  compat?: ModelCompatConfig;
-}): string | undefined {
-  if (
-    params.provider !== "foxcode-codex" ||
-    params.modelApi !== "openai-responses" ||
-    params.compat?.textToolCalls?.enabled !== true
-  ) {
-    return undefined;
-  }
-
-  return [
-    "Foxcode tool-call compatibility is enabled.",
-    'If a tool is needed, emit it immediately in exactly one of these forms: `to=<tool> {"arg":"value"}` or `{"tool":"<tool>","args":{...}}`.',
-    "Do not describe the tool in natural language first.",
-    "Do not emit bracket summaries like `[Tool call: ...]`, and do not emit `NO_REPLY` when a tool call is required.",
-    "If no tool is needed, answer normally; once your user-facing answer is complete, do not call more tools after it.",
-  ].join("\n");
-}
-
-export function buildFoxcodeCompatBootstrapContainmentPrompt(params: {
-  provider?: string;
-  modelApi?: string;
-  messageChannel?: string;
-  messages?: unknown[];
-  compat?: ModelCompatConfig;
-}): string | undefined {
-  if (
-    params.provider !== "foxcode-codex" ||
-    params.modelApi !== "openai-responses" ||
-    params.compat?.textToolCalls?.enabled !== true
-  ) {
-    return undefined;
-  }
-
-  const normalizedChannel = normalizeMessageChannel(params.messageChannel);
-  const isFreshExternalChannelSession =
-    !!normalizedChannel &&
-    !isInternalMessageChannel(normalizedChannel) &&
-    !params.messages?.some((message) => {
-      return (
-        !!message &&
-        typeof message === "object" &&
-        (message as { role?: unknown }).role === "assistant"
-      );
-    });
-
-  if (!isFreshExternalChannelSession) {
-    return undefined;
-  }
-
-  return [
-    "This is a fresh external user turn.",
-    "Treat BOOTSTRAP.md as background context only.",
-    "Do not output a bootstrap greeting, startup line, onboarding questionnaire, or identity-setup prompt as your main reply.",
-    'Do not say things like "Hey. I just came online" or "Who am I, and who are you?" unless the user explicitly asked for that.',
-    "Reply directly to the user's actual message.",
-  ].join("\n");
-}
-
 export function resolvePromptModeForSession(sessionKey?: string): "minimal" | "full" {
   if (!sessionKey) {
     return "full";
@@ -2271,32 +2204,11 @@ export async function runEmbeddedAttempt(
       });
       trackSessionManagerAccess(params.sessionFile);
 
-      const existingSessionMessages = sessionManager.buildSessionContext().messages;
-      const compatExtraSystemPrompt = buildFoxcodeCompatExtraSystemPrompt({
-        provider: params.provider,
-        modelApi: params.model.api,
-        messageChannel: runtimeChannel,
-        messages: existingSessionMessages,
-        compat: params.model.compat,
-      });
-      const foxcodeBootstrapContainmentPrompt = buildFoxcodeCompatBootstrapContainmentPrompt({
-        provider: params.provider,
-        modelApi: params.model.api,
-        messageChannel: runtimeChannel,
-        messages: existingSessionMessages,
-        compat: params.model.compat,
-      });
-      const mergedExtraSystemPrompt = joinPresentTextSegments(
-        [compatExtraSystemPrompt, params.extraSystemPrompt],
-        { trim: true },
-      );
-
       const appendPrompt = buildEmbeddedSystemPrompt({
         workspaceDir: effectiveWorkspace,
         defaultThinkLevel: params.thinkLevel,
         reasoningLevel: params.reasoningLevel ?? "off",
-        extraSystemPrompt: mergedExtraSystemPrompt,
-        postProjectContextSystemPrompt: foxcodeBootstrapContainmentPrompt,
+        extraSystemPrompt: params.extraSystemPrompt,
         ownerNumbers: params.ownerNumbers,
         ownerDisplay: ownerDisplay.ownerDisplay,
         ownerDisplaySecret: ownerDisplay.ownerDisplaySecret,
@@ -2853,7 +2765,7 @@ export async function runEmbeddedAttempt(
         });
       };
 
-      // Compat providers (Foxcode) interleave commentary text with tool calls
+      // Compat providers can interleave commentary text with tool calls
       // during streaming. Deferring block replies to message_end allows the
       // isToolUseAssistant check to suppress interim commentary before delivery.
       const modelCompat = params.model.compat as ModelCompatConfig | undefined;

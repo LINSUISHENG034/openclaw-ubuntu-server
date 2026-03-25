@@ -331,7 +331,7 @@ export async function handleToolExecutionStart(
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ) {
   // Only text_end mode should flush in-progress assistant text before tool start.
-  // In message_end mode, compat providers like Foxcode can stream commentary
+  // In message_end mode, compat providers can stream commentary
   // before a toolUse assistant message; flushing here leaks that commentary to
   // external channels before message_end can classify it as intermediate.
   if (ctx.state.blockReplyBreak === "text_end") {

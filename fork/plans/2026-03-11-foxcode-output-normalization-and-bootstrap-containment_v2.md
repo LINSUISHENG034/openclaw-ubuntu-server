@@ -1,5 +1,7 @@
 # OpenClaw Foxcode Output Normalization and Bootstrap Containment
 
+> Historical note: Foxcode is no longer an active provider in this fork. This plan is archived for context only.
+
 ## Status
 
 Active final proposal.

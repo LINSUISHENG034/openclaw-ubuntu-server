@@ -651,10 +651,10 @@ describe("buildAssistantMessageFromResponse", () => {
     const msg = buildAssistantMessageFromResponse(response, modelInfo);
 
     expect(msg.content).toEqual([
-      {
+      expect.objectContaining({
         type: "text",
         text: 'to=exec commentary code\n{"command":"pwd","yieldMs":1000}',
-      },
+      }),
     ]);
     expect(msg.stopReason).toBe("stop");
   });
@@ -706,7 +706,7 @@ describe("buildAssistantMessageFromResponse", () => {
     );
 
     expect(msg.content).toEqual([
-      { type: "text", text: "Running now.\n\nDone." },
+      expect.objectContaining({ type: "text", text: "Running now.\n\nDone." }),
       {
         type: "toolCall",
         id: "compat_text_call_1",
@@ -736,7 +736,7 @@ describe("buildAssistantMessageFromResponse", () => {
       response,
       {
         api: "openai-responses",
-        provider: "foxcode-codex",
+        provider: "compat-provider",
         id: "gpt-5.2",
         compat: {
           textToolCalls: {

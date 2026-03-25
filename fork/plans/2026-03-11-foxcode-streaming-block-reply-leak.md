@@ -1,5 +1,7 @@
 # Foxcode Streaming Block Reply Leak Fix
 
+> Historical note: Foxcode is no longer an active provider in this fork. This plan is archived for context only.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Prevent Foxcode's interleaved natural-language commentary text from being delivered to Telegram/Discord/etc. as block replies during streaming, before `message_end` can suppress it.

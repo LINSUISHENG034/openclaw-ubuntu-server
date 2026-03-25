@@ -9,7 +9,7 @@ import {
 const LAB_TOOL_COMMENTARY = "我先检查蓝牙和音频状态。";
 const LAB_TOOL_COMMAND = "bluetoothctl show";
 const LAB_FINAL_REPLY = "[[reply_to_current]] 已处理，`Aura Studio 5` 这边我成功触发了一次测试音。";
-const FOXCODE_COMPAT = {
+const TEXT_TOOL_CALL_COMPAT = {
   textToolCalls: {
     enabled: true,
     formats: ["codex_commentary_v1"],
@@ -19,13 +19,13 @@ const FOXCODE_COMPAT = {
   },
 } as const;
 
-function createFoxcodeCompatHarness() {
+function createCompatHarness() {
   const onBlockReply = vi.fn();
   const { emit, subscription } = createSubscribedSessionHarness({
-    runId: "foxcode-lab-compat",
+    runId: "compat-text-tool-call-replay",
     onBlockReply,
     blockReplyBreak: resolveEffectiveBlockReplyBreak({
-      compat: FOXCODE_COMPAT,
+      compat: TEXT_TOOL_CALL_COMPAT,
       requested: "text_end",
     }),
   });
@@ -80,9 +80,9 @@ function emitFinalStopReply(emit: (evt: unknown) => void) {
   });
 }
 
-async function replayLabFoxcodeCompatTurn(emit: (evt: unknown) => void) {
+async function replayCompatToolUseTurn(emit: (evt: unknown) => void) {
   // Real compat leak shape:
-  // 1. Foxcode compat rewrites text_end delivery to message_end.
+  // 1. Compat text-tool-call mode rewrites text_end delivery to message_end.
   // 2. The model streams commentary text before requesting tools.
   // 3. tool_execution_start flushes the buffer before toolUse message_end can suppress it.
   emit({
@@ -97,11 +97,11 @@ async function replayLabFoxcodeCompatTurn(emit: (evt: unknown) => void) {
   await flushAsyncHandlers();
 }
 
-describe("subscribeEmbeddedPiSession Foxcode compat replay", () => {
+describe("subscribeEmbeddedPiSession compat replay", () => {
   it("keeps compat toolUse commentary internal until the later final stop reply arrives", async () => {
-    const { emit, subscription, onBlockReply } = createFoxcodeCompatHarness();
+    const { emit, subscription, onBlockReply } = createCompatHarness();
 
-    await replayLabFoxcodeCompatTurn(emit);
+    await replayCompatToolUseTurn(emit);
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
     expect(onBlockReply).toHaveBeenCalledWith(

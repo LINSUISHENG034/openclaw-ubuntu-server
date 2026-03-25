@@ -9,11 +9,7 @@ function shouldNormalize(params: {
   modelApi?: string;
   compat?: ModelCompatConfig;
 }): boolean {
-  return (
-    params.provider === "foxcode-codex" &&
-    params.modelApi === "openai-responses" &&
-    params.compat?.textToolCalls?.enabled === true
-  );
+  return params.compat?.textToolCalls?.enabled === true;
 }
 
 function canonicalizeToolArguments(

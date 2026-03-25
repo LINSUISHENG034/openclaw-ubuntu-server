@@ -9,4 +9,10 @@ Use it for:
 - post-merge verification steps that catch regressions early
 - local guardrails that should be rechecked after large upstream updates
 
+Historical note:
+
+- Older merge notes may mention preserving Foxcode-specific behavior.
+- Foxcode is no longer an active provider target in this fork.
+- Treat those notes as historical context, not as default guidance for future merges.
+
 Do not store secrets here.

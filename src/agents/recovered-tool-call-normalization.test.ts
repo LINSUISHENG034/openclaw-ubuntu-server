@@ -31,7 +31,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat,
     });
@@ -68,7 +68,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat,
     });
@@ -99,7 +99,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat,
     });
@@ -130,7 +130,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat,
     });
@@ -145,7 +145,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
     ]);
   });
 
-  it("leaves non-Foxcode content untouched", () => {
+  it("leaves already-canonical compat content untouched", () => {
     const message = {
       role: "assistant",
       stopReason: "toolUse",
@@ -154,14 +154,14 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
           type: "toolCall",
           id: "compat_text_call_1",
           name: "read",
-          arguments: { filePath: "/tmp/test.txt" },
+          arguments: { path: "/tmp/test.txt" },
         },
       ],
     };
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "openai",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat,
     });
@@ -171,7 +171,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
         type: "toolCall",
         id: "compat_text_call_1",
         name: "read",
-        arguments: { filePath: "/tmp/test.txt" },
+        arguments: { path: "/tmp/test.txt" },
       },
     ]);
   });
@@ -192,7 +192,7 @@ describe("normalizeRecoveredToolCallsInAssistantMessage", () => {
 
     normalizeRecoveredToolCallsInAssistantMessage({
       message,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat: {},
     });

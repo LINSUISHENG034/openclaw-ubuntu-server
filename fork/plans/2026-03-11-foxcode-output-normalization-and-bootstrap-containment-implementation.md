@@ -1,5 +1,7 @@
 # Foxcode Output Normalization and Bootstrap Containment Implementation Plan
 
+> Historical note: Foxcode is no longer an active provider in this fork. This implementation plan is archived for context only.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Fix the reproduced Foxcode `openai-responses` failures by correcting recovered tool arguments, guaranteeing unique recovered tool-call ids across an assistant message, and suppressing bootstrap-dominant replies on fresh external-channel sessions.

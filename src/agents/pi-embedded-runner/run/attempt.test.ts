@@ -6,9 +6,7 @@ import { resolveOllamaBaseUrlForRun } from "../../ollama-stream.js";
 import { buildAgentSystemPrompt } from "../../system-prompt.js";
 import { buildEmbeddedSystemPrompt } from "../system-prompt.js";
 import {
-  buildFoxcodeCompatBootstrapContainmentPrompt,
   buildAfterTurnRuntimeContext,
-  buildFoxcodeCompatExtraSystemPrompt,
   buildSessionsYieldContextMessage,
   composeSystemPromptWithHookContext,
   persistSessionsYieldContextMessage,
@@ -304,88 +302,6 @@ describe("composeSystemPromptWithHookContext", () => {
     expect(turns[2]?.prompt.startsWith("hello once more")).toBe(true);
     expect(turns[0]?.prompt).toContain("[Bootstrap truncation warning]");
     expect(turns[2]?.prompt).toContain("[Bootstrap truncation warning]");
-  });
-});
-
-describe("buildFoxcodeCompatExtraSystemPrompt", () => {
-  it("returns provider-specific tool protocol guidance for foxcode responses compat", () => {
-    const prompt = buildFoxcodeCompatExtraSystemPrompt({
-      provider: "foxcode-codex",
-      modelApi: "openai-responses",
-      compat: {
-        textToolCalls: {
-          enabled: true,
-          formats: ["codex_commentary_v1"],
-        },
-      },
-    });
-
-    expect(prompt).toContain("Foxcode tool-call compatibility is enabled");
-    expect(prompt).toContain('`to=<tool> {"arg":"value"}`');
-    expect(prompt).toContain('`{"tool":"<tool>","args":{...}}`');
-    expect(prompt).toContain("Do not emit bracket summaries");
-    expect(prompt).toContain("do not call more tools after it");
-  });
-
-  it("does not add provider-specific guidance when compat is disabled", () => {
-    const prompt = buildFoxcodeCompatExtraSystemPrompt({
-      provider: "foxcode-codex",
-      modelApi: "openai-responses",
-      compat: {},
-    });
-
-    expect(prompt).toBeUndefined();
-  });
-
-  it("adds bootstrap containment for fresh external-channel foxcode sessions", () => {
-    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
-      provider: "foxcode-codex",
-      modelApi: "openai-responses",
-      messageChannel: "telegram",
-      messages: [{ role: "user", content: "hi" }],
-      compat: {
-        textToolCalls: {
-          enabled: true,
-          formats: ["codex_commentary_v1"],
-        },
-      },
-    });
-
-    expect(prompt).toContain("Do not output a bootstrap greeting");
-  });
-
-  it("does not add bootstrap containment for fresh local or web sessions", () => {
-    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
-      provider: "foxcode-codex",
-      modelApi: "openai-responses",
-      messageChannel: "webchat",
-      messages: [{ role: "user", content: "hi" }],
-      compat: {
-        textToolCalls: {
-          enabled: true,
-          formats: ["codex_commentary_v1"],
-        },
-      },
-    });
-
-    expect(prompt).toBeUndefined();
-  });
-
-  it("does not add bootstrap containment for non-foxcode providers", () => {
-    const prompt = buildFoxcodeCompatBootstrapContainmentPrompt({
-      provider: "openai",
-      modelApi: "openai-responses",
-      messageChannel: "telegram",
-      messages: [{ role: "user", content: "hi" }],
-      compat: {
-        textToolCalls: {
-          enabled: true,
-          formats: ["codex_commentary_v1"],
-        },
-      },
-    });
-
-    expect(prompt).toBeUndefined();
   });
 });
 
@@ -1237,7 +1153,7 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
           type: "toolCall",
           id: "compat_text_call_1",
           name: "read",
-          arguments: { filePath: "/tmp/test.txt" },
+          arguments: { path: "/tmp/test.txt" },
         },
       ],
     });
@@ -1267,7 +1183,7 @@ describe("wrapStreamFnApplyTextToolCallCompat", () => {
 
     const stream = await invokeWrappedStream({
       baseFn,
-      provider: "foxcode-codex",
+      provider: "compat-provider",
       modelApi: "openai-responses",
       compat: {
         textToolCalls: {

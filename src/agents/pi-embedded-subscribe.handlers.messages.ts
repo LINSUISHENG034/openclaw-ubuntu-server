@@ -363,7 +363,7 @@ export function handleMessageEnd(
     rawThinking: extractAssistantThinking(assistantMessage),
   });
 
-  // Providers like Foxcode can emit user-facing-looking text in the same
+  // Compat providers can emit user-facing-looking text in the same
   // assistant message that also requests tools (`stopReason: "toolUse"`).
   // Treat that message as intermediate only: the real user-facing answer
   // should come from the later assistant stop message after tools finish.

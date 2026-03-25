@@ -1,5 +1,7 @@
 # Foxcode Telegram Leak Repair
 
+> Historical note: Foxcode is no longer an active provider in this fork. This document is retained only as a record of past debugging and should not be treated as current merge policy.
+
 Date: 2026-03-12
 
 ## Goal

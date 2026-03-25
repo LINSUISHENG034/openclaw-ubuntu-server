@@ -5,10 +5,10 @@ REPO_ROOT="/mnt/sda1/github/openclaw"
 EXPECTED_UPSTREAM_URL="https://github.com/openclaw/openclaw"
 SERVICE_NAME="openclaw-gateway.service"
 GATEWAY_PORT="18789"
-FOXCODE_LEAK_TESTS=(
+COMPAT_REGRESSION_TESTS=(
   "extensions/telegram/src/bot-message-dispatch.test.ts"
   "src/agents/pi-embedded-runner/run/attempt.test.ts"
-  "src/agents/pi-embedded-subscribe.subscribe-embedded-pi-session.replays-foxcode-compat-tooluse-boundary.test.ts"
+  "src/agents/pi-embedded-subscribe.compat-tooluse-boundary.test.ts"
 )
 
 cd "$REPO_ROOT"
@@ -43,10 +43,10 @@ echo "== Install dependencies =="
 pnpm install
 echo
 
-# These targeted tests protect the Foxcode Telegram leak fix from upstream drift.
+# These targeted tests protect the generic compat text-tool-call behavior from upstream drift.
 #
 # Why this lives in the local update script:
-# - Foxcode compat can leak process text on two different outward paths:
+# - compat text-tool-call handling can leak process text on two outward paths:
 #   1. embedded block-reply flushing before message_end classification
 #   2. Telegram partial-preview lanes showing compat commentary before the final answer refreshes
 # - both bugs are easy to reintroduce during upstream refactors because the final
@@ -57,12 +57,12 @@ echo
 # What each test file covers:
 # - attempt.test.ts:
 #   compat textToolCalls must still force blockReplyBreak to message_end
-# - replays-foxcode-compat-tooluse-boundary.test.ts:
+# - compat-tooluse-boundary.test.ts:
 #   tool_execution_start must not flush compat commentary before toolUse message_end
 # - bot-message-dispatch.test.ts:
-#   Telegram must not create answer partial previews for Foxcode compat sessions
-echo "== Foxcode leak regression checks =="
-pnpm vitest run "${FOXCODE_LEAK_TESTS[@]}"
+#   Telegram must not create answer partial previews for compat text-tool-call sessions
+echo "== Compat regression checks =="
+pnpm test -- "${COMPAT_REGRESSION_TESTS[@]}"
 echo
 
 echo "== Build =="
