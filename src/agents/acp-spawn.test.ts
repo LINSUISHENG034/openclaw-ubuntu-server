@@ -390,6 +390,7 @@ describe("spawnAcpDirect", () => {
         matrix: {
           threadBindings: {
             enabled: true,
+            spawnAcpSessions: true,
           },
         },
       },
@@ -404,19 +405,27 @@ describe("spawnAcpDirect", () => {
       resolveByConversation: (ref) => hoisted.sessionBindingResolveByConversationMock(ref),
       unbind: async (input) => await hoisted.sessionBindingUnbindMock(input),
     });
-    hoisted.sessionBindingBindMock.mockImplementationOnce(
+    hoisted.sessionBindingBindMock.mockImplementation(
       async (input: {
         targetSessionKey: string;
-        conversation: { accountId: string; conversationId: string; parentConversationId?: string };
+        conversation: {
+          channel?: string;
+          accountId: string;
+          conversationId: string;
+          parentConversationId?: string;
+        };
         metadata?: Record<string, unknown>;
-      }) =>
-        createSessionBinding({
+      }) => {
+        const channel = input.conversation.channel === "matrix" ? "matrix" : "discord";
+        return createSessionBinding({
           targetSessionKey: input.targetSessionKey,
           conversation: {
-            channel: "matrix",
+            channel,
             accountId: input.conversation.accountId,
             conversationId: "child-thread",
-            parentConversationId: input.conversation.parentConversationId ?? "!room:example",
+            parentConversationId:
+              input.conversation.parentConversationId ??
+              (channel === "matrix" ? "!room:example" : "parent-channel"),
           },
           metadata: {
             boundBy:
@@ -424,7 +433,8 @@ describe("spawnAcpDirect", () => {
             agentId: "codex",
             webhookId: "wh-1",
           },
-        }),
+        });
+      },
     );
 
     const result = await spawnAcpDirect(
@@ -441,6 +451,9 @@ describe("spawnAcpDirect", () => {
         agentTo: "room:!room:example",
       },
     );
+    if (result.status !== "accepted") {
+      throw new Error(`unexpected matrix ACP spawn failure: ${result.error ?? "unknown error"}`);
+    }
     expect(result.status).toBe("accepted");
     expect(hoisted.sessionBindingBindMock).toHaveBeenCalledWith(
       expect.objectContaining({

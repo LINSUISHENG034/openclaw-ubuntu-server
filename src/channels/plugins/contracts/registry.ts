@@ -807,7 +807,7 @@ const sessionBindingContractEntries: Record<
       adapterAvailable: true,
       bindSupported: true,
       unbindSupported: true,
-      placements: ["current"],
+      placements: ["current", "child"],
     },
     getCapabilities: () => {
       createTelegramThreadBindingManager({
@@ -835,7 +835,7 @@ const sessionBindingContractEntries: Record<
           accountId: "default",
           conversationId: "-100200300:topic:77",
         },
-        placement: "current",
+        placement: "child",
         metadata: {
           boundBy: "user-1",
         },

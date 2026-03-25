@@ -58,27 +58,46 @@ describe("telegram thread bindings", () => {
     expect(manager.getByConversationId("-100200300:topic:77")?.boundBy).toBe("user-1");
   });
 
-  it("does not support child placement", async () => {
-    createTelegramThreadBindingManager({
+  it("supports child placement for ACP and subagent thread-bound sessions", async () => {
+    const manager = createTelegramThreadBindingManager({
       accountId: "default",
       persist: false,
       enableSweeper: false,
     });
 
-    await expect(
-      getSessionBindingService().bind({
-        targetSessionKey: "agent:main:subagent:child-1",
-        targetKind: "subagent",
-        conversation: {
-          channel: "telegram",
-          accountId: "default",
-          conversationId: "-100200300:topic:77",
-        },
-        placement: "child",
-      }),
-    ).rejects.toMatchObject({
-      code: "BINDING_CAPABILITY_UNSUPPORTED",
+    const acpBound = await getSessionBindingService().bind({
+      targetSessionKey: "agent:codex:acp:binding:telegram:default:abc123",
+      targetKind: "session",
+      conversation: {
+        channel: "telegram",
+        accountId: "default",
+        conversationId: "-100200300:topic:77",
+      },
+      placement: "child",
+      metadata: {
+        agentId: "codex",
+        label: "codex-telegram",
+      },
     });
+
+    expect(acpBound.conversation.channel).toBe("telegram");
+    expect(acpBound.targetKind).toBe("session");
+    expect(acpBound.targetSessionKey).toBe("agent:codex:acp:binding:telegram:default:abc123");
+    expect(manager.getByConversationId("-100200300:topic:77")?.agentId).toBe("codex");
+
+    const subagentBound = await getSessionBindingService().bind({
+      targetSessionKey: "agent:main:subagent:child-1",
+      targetKind: "subagent",
+      conversation: {
+        channel: "telegram",
+        accountId: "default",
+        conversationId: "-100200300:topic:78",
+      },
+      placement: "child",
+    });
+
+    expect(subagentBound.targetKind).toBe("subagent");
+    expect(manager.getByConversationId("-100200300:topic:78")?.targetKind).toBe("subagent");
   });
 
   it("shares binding state across distinct module instances", async () => {
