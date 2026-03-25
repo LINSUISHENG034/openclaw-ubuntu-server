@@ -8,10 +8,11 @@ import {
 } from "../../scripts/copy-bundled-plugin-metadata.mjs";
 
 const tempDirs: string[] = [];
-const optionalBundlesEnv = {
-  ...process.env,
-  OPENCLAW_INCLUDE_OPTIONAL_BUNDLED: "1",
-};
+const excludeOptionalEnv = { OPENCLAW_INCLUDE_OPTIONAL_BUNDLED: "0" } as const;
+const copyBundledPluginMetadataWithEnv = copyBundledPluginMetadata as (params?: {
+  repoRoot?: string;
+  env?: NodeJS.ProcessEnv;
+}) => void;
 
 function makeRepoRoot(prefix: string): string {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -59,7 +60,7 @@ describe("copyBundledPluginMetadata", () => {
       openclaw: { extensions: ["./index.ts"] },
     });
 
-    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
+    copyBundledPluginMetadata({ repoRoot });
 
     expect(
       fs.existsSync(path.join(repoRoot, "dist", "extensions", "acpx", "openclaw.plugin.json")),
@@ -130,7 +131,7 @@ describe("copyBundledPluginMetadata", () => {
     fs.mkdirSync(staleNodeModulesSkillDir, { recursive: true });
     fs.writeFileSync(path.join(staleNodeModulesSkillDir, "stale.txt"), "stale\n", "utf8");
 
-    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
+    copyBundledPluginMetadata({ repoRoot });
 
     const copiedSkillDir = path.join(
       repoRoot,
@@ -173,7 +174,7 @@ describe("copyBundledPluginMetadata", () => {
       openclaw: { extensions: ["./index.ts"] },
     });
 
-    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
+    copyBundledPluginMetadata({ repoRoot });
 
     expect(
       fs.readFileSync(
@@ -226,7 +227,7 @@ describe("copyBundledPluginMetadata", () => {
     const staleNodeModulesDir = path.join(repoRoot, "dist", "extensions", "tlon", "node_modules");
     fs.mkdirSync(staleNodeModulesDir, { recursive: true });
 
-    copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
+    copyBundledPluginMetadata({ repoRoot });
 
     const bundledManifest = JSON.parse(
       fs.readFileSync(
@@ -268,7 +269,7 @@ describe("copyBundledPluginMetadata", () => {
     });
 
     try {
-      copyBundledPluginMetadata({ repoRoot, env: optionalBundlesEnv });
+      copyBundledPluginMetadata({ repoRoot });
     } finally {
       cpSyncSpy.mockRestore();
     }
@@ -343,7 +344,7 @@ describe("copyBundledPluginMetadata", () => {
     expect(fs.existsSync(staleDistDir)).toBe(false);
   });
 
-  it("skips optional bundled plugin metadata when the optional cluster is not built", () => {
+  it("skips metadata for optional bundled clusters only when explicitly disabled", () => {
     const repoRoot = makeRepoRoot("openclaw-bundled-plugin-optional-skip-");
     const pluginDir = path.join(repoRoot, "extensions", "acpx");
     fs.mkdirSync(pluginDir, { recursive: true });
@@ -352,12 +353,33 @@ describe("copyBundledPluginMetadata", () => {
       configSchema: { type: "object" },
     });
     writeJson(path.join(pluginDir, "package.json"), {
-      name: "@openclaw/acpx",
+      name: "@openclaw/acpx-plugin",
       openclaw: { extensions: ["./index.ts"] },
     });
 
-    copyBundledPluginMetadata({ repoRoot });
+    copyBundledPluginMetadataWithEnv({ repoRoot, env: excludeOptionalEnv });
 
     expect(fs.existsSync(path.join(repoRoot, "dist", "extensions", "acpx"))).toBe(false);
+  });
+
+  it("still bundles previously released optional plugins without the opt-in env", () => {
+    const repoRoot = makeRepoRoot("openclaw-bundled-plugin-released-optional-");
+    const pluginDir = path.join(repoRoot, "extensions", "whatsapp");
+    fs.mkdirSync(pluginDir, { recursive: true });
+    writeJson(path.join(pluginDir, "openclaw.plugin.json"), {
+      id: "whatsapp",
+      configSchema: { type: "object" },
+    });
+    writeJson(path.join(pluginDir, "package.json"), {
+      name: "@openclaw/whatsapp",
+      openclaw: {
+        extensions: ["./index.ts"],
+        install: { npmSpec: "@openclaw/whatsapp" },
+      },
+    });
+
+    copyBundledPluginMetadataWithEnv({ repoRoot, env: {} });
+
+    expect(fs.existsSync(path.join(repoRoot, "dist", "extensions", "whatsapp"))).toBe(true);
   });
 });

@@ -127,14 +127,17 @@ function resolveTelegramSessionEntry(params: {
   cfg: OpenClawConfig;
   sessionKey?: string;
   agentId: string;
+  telegramDeps: TelegramBotDeps;
 }) {
-  const { cfg, sessionKey, agentId } = params;
+  const { cfg, sessionKey, agentId, telegramDeps } = params;
   if (!sessionKey) {
     return undefined;
   }
   try {
-    const storePath = resolveStorePath(cfg.session?.store, { agentId });
-    const store = loadSessionStore(storePath, { skipCache: true });
+    const storePath = telegramDeps.resolveStorePath(cfg.session?.store, { agentId });
+    const store = (telegramDeps.loadSessionStore ?? loadSessionStore)(storePath, {
+      skipCache: true,
+    });
     return resolveSessionStoreEntry({ store, sessionKey }).existing;
   } catch {
     return undefined;
@@ -145,11 +148,24 @@ function resolveTelegramReasoningLevel(params: {
   cfg: OpenClawConfig;
   sessionKey?: string;
   agentId: string;
+  telegramDeps: TelegramBotDeps;
 }): TelegramReasoningLevel {
-  const entry = resolveTelegramSessionEntry(params);
-  const level = entry?.reasoningLevel;
-  if (level === "on" || level === "stream") {
-    return level;
+  const { cfg, sessionKey, agentId, telegramDeps } = params;
+  if (!sessionKey) {
+    return "off";
+  }
+  try {
+    const storePath = telegramDeps.resolveStorePath(cfg.session?.store, { agentId });
+    const store = (telegramDeps.loadSessionStore ?? loadSessionStore)(storePath, {
+      skipCache: true,
+    });
+    const entry = resolveSessionStoreEntry({ store, sessionKey }).existing;
+    const level = entry?.reasoningLevel;
+    if (level === "on" || level === "stream") {
+      return level;
+    }
+  } catch {
+    // Fall through to default.
   }
   return "off";
 }
@@ -158,6 +174,7 @@ function shouldSuppressTelegramCompatAnswerPreview(params: {
   cfg: OpenClawConfig;
   sessionKey?: string;
   agentId: string;
+  telegramDeps: TelegramBotDeps;
 }): boolean {
   const entry = resolveTelegramSessionEntry(params);
   if (!entry) {
@@ -229,6 +246,7 @@ export const dispatchTelegramMessage = async ({
     cfg,
     sessionKey: ctxPayload.SessionKey,
     agentId: route.agentId,
+    telegramDeps,
   });
   const forceBlockStreamingForReasoning = resolvedReasoningLevel === "on";
   const streamReasoningDraft = resolvedReasoningLevel === "stream";
@@ -236,6 +254,7 @@ export const dispatchTelegramMessage = async ({
     cfg,
     sessionKey: ctxPayload.SessionKey,
     agentId: route.agentId,
+    telegramDeps,
   });
   const previewStreamingEnabled = streamMode !== "off";
   const canStreamAnswerDraft =
@@ -256,7 +275,7 @@ export const dispatchTelegramMessage = async ({
   const archivedReasoningPreviewIds: number[] = [];
   const createDraftLane = (laneName: LaneName, enabled: boolean): DraftLaneState => {
     const stream = enabled
-      ? createTelegramDraftStream({
+      ? (telegramDeps.createTelegramDraftStream ?? createTelegramDraftStream)({
           api: bot.api,
           chatId,
           maxChars: draftMaxChars,
@@ -518,11 +537,12 @@ export const dispatchTelegramMessage = async ({
     return { ...payload, text };
   };
   const sendPayload = async (payload: ReplyPayload) => {
-    const result = await deliverReplies({
+    const result = await (telegramDeps.deliverReplies ?? deliverReplies)({
       ...deliveryBaseOptions,
       replies: [payload],
       onVoiceRecording: sendRecordVoice,
       silent: silentErrorReplies && payload.isError === true,
+      mediaLoader: telegramDeps.loadWebMedia,
     });
     if (result.delivered) {
       deliveryState.markDelivered();
@@ -533,7 +553,7 @@ export const dispatchTelegramMessage = async ({
     if (result.kind !== "preview-finalized") {
       return;
     }
-    emitInternalMessageSentHook({
+    (telegramDeps.emitInternalMessageSentHook ?? emitInternalMessageSentHook)({
       sessionKeyForInternalHooks: deliveryBaseOptions.sessionKeyForInternalHooks,
       chatId: deliveryBaseOptions.chatId,
       accountId: deliveryBaseOptions.accountId,
@@ -557,7 +577,7 @@ export const dispatchTelegramMessage = async ({
       await lane.stream?.stop();
     },
     editPreview: async ({ messageId, text, previewButtons }) => {
-      await editMessageTelegram(chatId, messageId, text, {
+      await (telegramDeps.editMessageTelegram ?? editMessageTelegram)(chatId, messageId, text, {
         api: bot.api,
         cfg,
         accountId: route.accountId,
@@ -583,8 +603,12 @@ export const dispatchTelegramMessage = async ({
   let isFirstTurnInSession = false;
   if (isDmTopic) {
     try {
-      const storePath = resolveStorePath(cfg.session?.store, { agentId: route.agentId });
-      const store = loadSessionStore(storePath, { skipCache: true });
+      const storePath = telegramDeps.resolveStorePath(cfg.session?.store, {
+        agentId: route.agentId,
+      });
+      const store = (telegramDeps.loadSessionStore ?? loadSessionStore)(storePath, {
+        skipCache: true,
+      });
       const sessionKey = ctxPayload.SessionKey;
       if (sessionKey) {
         const entry = resolveSessionStoreEntry({ store, sessionKey }).existing;
@@ -905,10 +929,11 @@ export const dispatchTelegramMessage = async ({
     const fallbackText = dispatchError
       ? "Something went wrong while processing your request. Please try again."
       : EMPTY_RESPONSE_FALLBACK;
-    const result = await deliverReplies({
+    const result = await (telegramDeps.deliverReplies ?? deliverReplies)({
       replies: [{ text: fallbackText }],
       ...deliveryBaseOptions,
       silent: silentErrorReplies && (dispatchError != null || hadErrorReplyFailureOrSkip),
+      mediaLoader: telegramDeps.loadWebMedia,
     });
     sentFallback = result.delivered;
   }

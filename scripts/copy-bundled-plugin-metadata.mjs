@@ -165,7 +165,11 @@ function copyDeclaredPluginSkillPaths(params) {
 }
 
 /**
- * @param {{ cwd?: string, repoRoot?: string, env?: NodeJS.ProcessEnv }} [params]
+ * @param {{
+ *   cwd?: string;
+ *   repoRoot?: string;
+ *   env?: NodeJS.ProcessEnv;
+ * }} [params]
  */
 export function copyBundledPluginMetadata(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
@@ -181,16 +185,20 @@ export function copyBundledPluginMetadata(params = {}) {
     if (!dirent.isDirectory()) {
       continue;
     }
-    sourcePluginDirs.add(dirent.name);
 
+    const pluginDir = path.join(extensionsRoot, dirent.name);
+    const manifestPath = path.join(pluginDir, "openclaw.plugin.json");
     const distPluginDir = path.join(distExtensionsRoot, dirent.name);
-    if (!shouldBuildBundledCluster(dirent.name, env)) {
+    const packageJsonPath = path.join(pluginDir, "package.json");
+    const packageJson = fs.existsSync(packageJsonPath)
+      ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
+      : undefined;
+    if (!shouldBuildBundledCluster(dirent.name, env, { packageJson })) {
       removePathIfExists(distPluginDir);
       continue;
     }
 
-    const pluginDir = path.join(extensionsRoot, dirent.name);
-    const manifestPath = path.join(pluginDir, "openclaw.plugin.json");
+    sourcePluginDirs.add(dirent.name);
     const distManifestPath = path.join(distPluginDir, "openclaw.plugin.json");
     const distPackageJsonPath = path.join(distPluginDir, "package.json");
     if (!fs.existsSync(manifestPath)) {
@@ -214,13 +222,10 @@ export function copyBundledPluginMetadata(params = {}) {
       : manifest;
     writeTextFileIfChanged(distManifestPath, `${JSON.stringify(bundledManifest, null, 2)}\n`);
 
-    const packageJsonPath = path.join(pluginDir, "package.json");
     if (!fs.existsSync(packageJsonPath)) {
       removeFileIfExists(distPackageJsonPath);
       continue;
     }
-
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
     if (packageJson.openclaw && "extensions" in packageJson.openclaw) {
       packageJson.openclaw = {
         ...packageJson.openclaw,

@@ -52,6 +52,15 @@ export async function getMemorySearchManager(params: {
     if (cached) {
       return { manager: cached };
     }
+    if (statusOnly) {
+      const fullCached = QMD_MANAGER_CACHE.get(`${baseCacheKey}:full`);
+      if (fullCached) {
+        // Status callers often close the manager they receive. Wrap the live
+        // full manager with a no-op close so health/status probes do not tear
+        // down the active QMD manager for the process.
+        return { manager: new BorrowedMemoryManager(fullCached) };
+      }
+    }
     try {
       const { QmdMemoryManager } = await import("./qmd-manager.js");
       const primary = await QmdMemoryManager.create({
@@ -62,7 +71,6 @@ export async function getMemorySearchManager(params: {
       });
       if (primary) {
         if (statusOnly) {
-          QMD_MANAGER_CACHE.set(cacheKey, primary);
           return { manager: primary };
         }
         const wrapper = new FallbackMemoryManager(
@@ -94,6 +102,44 @@ export async function getMemorySearchManager(params: {
     const message = err instanceof Error ? err.message : String(err);
     return { manager: null, error: message };
   }
+}
+
+class BorrowedMemoryManager implements MemorySearchManager {
+  constructor(private readonly inner: MemorySearchManager) {}
+
+  async search(
+    query: string,
+    opts?: { maxResults?: number; minScore?: number; sessionKey?: string },
+  ) {
+    return await this.inner.search(query, opts);
+  }
+
+  async readFile(params: { relPath: string; from?: number; lines?: number }) {
+    return await this.inner.readFile(params);
+  }
+
+  status() {
+    return this.inner.status();
+  }
+
+  async sync(params?: {
+    reason?: string;
+    force?: boolean;
+    sessionFiles?: string[];
+    progress?: (update: MemorySyncProgressUpdate) => void;
+  }) {
+    await this.inner.sync?.(params);
+  }
+
+  async probeEmbeddingAvailability(): Promise<MemoryEmbeddingProbeResult> {
+    return await this.inner.probeEmbeddingAvailability();
+  }
+
+  async probeVectorAvailability() {
+    return await this.inner.probeVectorAvailability();
+  }
+
+  async close() {}
 }
 
 export async function closeAllMemorySearchManagers(): Promise<void> {

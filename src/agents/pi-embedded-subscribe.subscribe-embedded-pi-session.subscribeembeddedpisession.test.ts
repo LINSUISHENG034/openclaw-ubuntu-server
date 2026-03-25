@@ -134,7 +134,9 @@ describe("subscribeEmbeddedPiSession", () => {
       emit({ type: "message_end", message: assistantMessage });
       await Promise.resolve();
 
-      expect(onBlockReply).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => {
+        expect(onBlockReply).toHaveBeenCalledTimes(1);
+      });
       expect(onBlockReply.mock.calls[0][0].text).toBe("Final answer");
 
       const streamTexts = onReasoningStream.mock.calls
@@ -177,10 +179,12 @@ describe("subscribeEmbeddedPiSession", () => {
       });
       await Promise.resolve();
 
+      await vi.waitFor(() => {
+        expect(onBlockReply.mock.calls.length).toBeGreaterThan(0);
+      });
       const payloadTexts = onBlockReply.mock.calls
         .map((call) => call[0]?.text)
         .filter((value): value is string => typeof value === "string");
-      expect(payloadTexts.length).toBeGreaterThan(0);
       for (const text of payloadTexts) {
         expect(text).not.toContain("Reasoning");
         expect(text).not.toContain(open);
