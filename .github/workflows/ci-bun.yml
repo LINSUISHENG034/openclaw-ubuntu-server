@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           submodules: false
 
@@ -52,7 +52,7 @@ jobs:
             command: OPENCLAW_TEST_ISOLATE=1 bunx vitest run --config vitest.unit.config.ts --shard 2/2
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
         with:
           submodules: false
 
